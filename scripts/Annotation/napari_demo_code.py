@@ -1,8 +1,11 @@
+"""
+Author: Christopher Z. Eddy
+Date: 02/07/23
+"""
+
 import napari 
-# from skimage import data 
 from skimage.io import imread
 import skimage.measure
-# from dask import delayed
 import os
 import glob 
 import json
@@ -10,14 +13,14 @@ import numpy as np
 from dask import delayed
 import dask.array as da
 import app_widget as tw 
-
-import psutil
-
+#import psutil
 
 """
 BUGS: 
 
 UNRESOLVED
+
+RESOLVED
 	#### 
 	  If you delete ALL the shapes and then put a new one, I think the properties and features is lost.
 	  Actually, the properties and features is fine. The table gets messed up, I think it isn't well adjusted if there is no entry.
@@ -29,14 +32,6 @@ UNRESOLVED
 	  run the app if the shapes layer has not been intiated, or we need to wait to set its properties.
 
 
-"""
-
-"""
-NOTES: We need someway to determine PREVIOUSLY MADE ANNOTATIONS VS PREDICTED ONES.
-For user generated annotations, we should specify an attribute like 'anno_style' with options 'manual' or 'auto'.
-So, lets say we READ a set of annotations.
-The problem is that when we read the annotations back from napari, we need a way to determine which annotations are which.
-Previously, I would do a centroid comparison. In previous code, I have done just this (see github). Perhaps, check with 
 """
 
 def import_filenames(filepath, pattern, recursive = False):
@@ -179,7 +174,7 @@ def get_all_channels(filename, filenames):
 viewer = napari.Viewer()
 
 #find the files within the working directory.
-filenames = import_filenames("../../data/annotation/napari_ex", pattern=[".png"], recursive=False)
+filenames = import_filenames("../../data/napari_ex", pattern=[".png"], recursive=False)
 #now, we will assume the annotation files have the same filename structure, but will be saved as a json for convenience. 
 
 if len(filenames)>0:
@@ -218,7 +213,7 @@ while cont:
 		shape_features = anno_data["features"]#should be a dictionary with keys 'class', 'anno_style'
 		#determine colors; should be equal to number of classes.
 		
-		face_color_cycle=['royalblue','green'] #assuming only two classes. In the future we can import a cycling color library, colorcet.
+		face_color_cycle=['royalblue','green'] #WILL REPRESENT CLASS, assuming only two classes. In the future we can import a cycling color library, colorcet.
 		edge_color_cycle=['red','blue']
 
 		# specify the display parameters for the text
@@ -304,23 +299,28 @@ while cont:
 		try:
 			new_brush=True
 			brush_data = viewer.layers['Labels'].data # label data same size as brush.
-			import pdb;pdb.set_trace() #CHECK OUT THE PROPERTIES AND FEATURES! NEED the label that was assigned.
 			#Let's assume there are more than 1 class ()
 			####
 			#https://napari.org/stable/gallery/add_shapes_with_features.html
 			####
-			brush_data = brush_data > 0. #convert to binary
-			#label.
-			brush_data = skimage.measure.label(brush_data,connectivity=1)
+			brush_data = brush_data[0,:,:] #> 0. #convert to binary, note that brush data loads as a (N x H x W) image. Since we aren't dealing with 3D data...
 			allverts = []
+			allclasses = []
 			#work one object at a time, as that is how I wrote the function.
 			for anno_i in range(1,int(np.max(brush_data))+1):
 				[vertices,_] = binary_mask_to_polygon_skimage(brush_data==anno_i,thresh=10)
 				allverts += vertices
+				allclasses += [anno_i for _ in vertices]
+
+			#all annotations were manual. 
 			if not new_polygons: #if we didn't already add polygons from shape data
 				anno_data['annotation'] = allverts
+				anno_data['features']['class'] = allclasses
+				anno_data['features']['anno_style'] = ['manual' for _ in allclasses]
 			else:
 				anno_data['annotation'] = anno_data['annotation']+allverts
+				anno_data['features']['class'] = anno_data['features']['class'] + allclasses
+				anno_data['features']['anno_style'] = anno_data['features']['anno_style'] + ['manual' for _ in allclasses]
 			viewer.layers.remove('Labels')
 		except:
 			new_brush=False

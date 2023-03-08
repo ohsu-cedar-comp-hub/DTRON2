@@ -339,7 +339,14 @@ while cont:
 		
 
 """
-Notes: It maye be computationally expensive to add all the images at once, in which case it would be best to only load 
-a single image and its corresponding annotations together. 
+MWE:
+## EDIT LINE 177 ON THIS CODE FOR WHERE DATA DIRECTORY IS, and TYPE OF DATA (.TIF vs .PNG). 
+## Data directory must follow as 
+# DataDir
+#	-> /images
+#	-> /annotations
+
+#Command line
+python -i napari_demo_code.py
 
 """

@@ -1,2 +1,4 @@
 .DS_Store
 *.pyc
+/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/data/annotation/napari_ex/segmentation/
+/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/scripts/Segmentation/Shape_Based/.ipynb_checkpoints

@@ -18,12 +18,15 @@ class App(widgets.QWidget):
 		self._table_widget = None
 		self.initUI(folder_path, image_pattern, update_image, make_export_handler)
 		self._layer = None
+		self._make_export_handler = make_export_handler
 
 	def initUI(self, folder_path, image_pattern, update_image, make_export_handler):
 		self.setGeometry(700, 100, 350, 380)
 		self.layout = widgets.QVBoxLayout()
 		self.layout.setAlignment(Qt.AlignTop)
-		self.refresh_table_button = widgets.QPushButton('Refresh table', self)
+		self.refresh_table_button = widgets.QPushButton('Refresh Annotations Table', self)
+		self.save_button = widgets.QPushButton('Save Annotation Updates', self)
+		self.layout.addWidget(self.save_button)
 		self.layout.addWidget(self.refresh_table_button)
 
 		def handle_image_selection(image_file_name, image_file_path, annot_file_path):
@@ -37,6 +40,7 @@ class App(widgets.QWidget):
 
 		self.setLayout(self.layout)
 		self.refresh_table_button.clicked.connect(self._refresh_table_widget)
+		self.save_button.clicked.connect(self._save_changes)
 
 	def get_layer(self):
 		return self._layer
@@ -51,6 +55,11 @@ class App(widgets.QWidget):
 		self._table_widget.setParent(None)
 		self._table_widget.deleteLater()
 		self._table_widget = None
+
+	def _save_changes(self):
+		export_handler = self._make_export_handler()
+		if export_handler and export_handler.is_updated():
+			export_handler.export_to_file()
 
 	def _add_table_widget(self):
 		layer = self._layer

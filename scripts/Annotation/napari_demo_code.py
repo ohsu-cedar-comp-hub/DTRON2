@@ -47,7 +47,7 @@ def get_layer(layer_name):
 	return None
 
 def make_export_handler():
-	if not curr_annot_file_path or not os.path.exists(curr_annot_file_path):
+	if not curr_annot_file_path:
 		return None
 
 	shapes_layer = get_layer('Shapes')

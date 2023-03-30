@@ -2,6 +2,7 @@ from np_encoder import NpEncoder
 from util.file import load_json_data
 from util.annotation import make_annotation_data
 import json
+import os
 
 class AnnotationExportHandler:
     def __init__(self, annot_file_path, image_name, shapes_layer=None, labels_layer=None):
@@ -25,7 +26,10 @@ class AnnotationExportHandler:
 
     def is_updated(self):
         current_content = self._get_current_content()
-        file_content = load_json_data(self._annot_file_path)
+        if not os.path.exists(self._annot_file_path):
+            file_content = None
+        else:
+            file_content = load_json_data(self._annot_file_path)
 
         return current_content != file_content
 

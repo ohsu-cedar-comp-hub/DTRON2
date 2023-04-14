@@ -132,7 +132,7 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 	shapes_layer.feature_defaults['class']=1
 	return shapes_layer
 
-pattern = [".png"]
+pattern = [".png", ".tif"]
 
 def on_folder_selected(selected_folder_path):
 	global curr_folder_path

@@ -45,15 +45,22 @@ class InputHandler:
         recursive : boolean, True if you wish for the search for files to be recursive under filepath.
         """
         # generate pattern finding
-        fpattern = ["**{}".format(x) for i,x in enumerate(pattern)]
-        fpattern = "".join(fpattern)
-        file_paths = glob.iglob(self.images_path + fpattern, recursive=recursive)
-        file_paths = [file_path for file_path in file_paths if file_path[0] != "."] # delete hidden files
-        # file_names = [filepath for filepath in file_paths]
-        file_names = [os.path.basename(filepath) for filepath in file_paths]
-        file_names.sort()  # sort based on name
+        fpatterns = ["**{}".format(x) for i,x in enumerate(pattern)]
 
-        return file_names
+        all_file_names = set()
+        for fpattern in fpatterns:
+            file_paths = glob.iglob(self.images_path + fpattern, recursive=recursive)
+            for file_path in file_paths:
+                # skip hidden files
+                if file_path[0] == ".":
+                    continue
+                file_name = os.path.basename(file_path)
+                all_file_names.add(file_name)
+
+        all_file_names = [file_name for file_name in all_file_names]
+        all_file_names.sort()  # sort based on name
+
+        return all_file_names
 
     def refresh_file_names(self):
         self.image_file_names = self._calculate_image_file_names(self.path, self.pattern, self.recursive)

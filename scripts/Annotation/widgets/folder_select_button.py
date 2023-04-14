@@ -9,6 +9,7 @@ class FolderSelectButton(QPushButton):
         self.clicked.connect(self.open_folder_dialog)
         self.make_export_handler = make_export_handler
 
+    # returns False if the user selected cancel option, returns True otherwise
     def _handle_unsaved_changes(self):
         # if the make_export_handler option is not set we should not prompt a message box
         if not self.make_export_handler:

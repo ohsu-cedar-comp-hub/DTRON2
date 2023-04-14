@@ -1,5 +1,6 @@
 from qtpy.QtWidgets import QMessageBox
 
+# returns False if cancel option is selected returns True otherwise
 def prompt_save_dialog(prompt_text, on_save, on_cancel=None):
     # if export_handler and export_handler.is_updated():
     reply = QMessageBox.question(

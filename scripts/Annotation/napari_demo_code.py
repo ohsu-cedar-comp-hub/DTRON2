@@ -13,6 +13,9 @@ from annotation_export_handler import AnnotationExportHandler
 from util.file import lazy_read, load_json_data
 from util.annotation import make_annotation_data
 from event_filter.close_event_filter import CloseEventFilter
+from qtpy.QtWidgets import QFileDialog
+from widgets.folder_select_button import FolderSelectButton
+
 #import psutil
 
 """
@@ -38,6 +41,13 @@ RESOLVED
 ##################################################################
 
 viewer = napari.Viewer()
+
+base_dir = os.getcwd()
+relative_folder_path = "../../data/annotation/napari_ex"
+
+curr_folder_path = os.path.join(base_dir, relative_folder_path)
+curr_folder_path = os.path.abspath(curr_folder_path)
+
 curr_image_file_name, curr_image_file_path, curr_annot_file_path = None, None, None
 
 def get_layer(layer_name):
@@ -124,13 +134,28 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 
 pattern = [".png"]
 
-base_dir = os.getcwd()
-relative_folder_path = "../../data/annotation/napari_ex"
+def on_folder_selected(selected_folder_path):
+	global curr_folder_path
+	curr_folder_path = selected_folder_path
+	folder_select_button.setParent(None)
+	refresh_dock_app()
 
-folder_path = os.path.join(base_dir, relative_folder_path)
-folder_path = os.path.abspath(folder_path)
 
-dock_app = App(folder_path, pattern, update_image, property_choices, make_export_handler)
-viewer.window.add_dock_widget(dock_app)
+folder_select_button = FolderSelectButton(text="Update Image Folder", initial_directory=curr_folder_path, on_folder_selected=on_folder_selected, make_export_handler=make_export_handler)
+
+dock_app = None
+
+def make_dock_app():
+	dock_app = App(curr_folder_path, pattern, update_image, property_choices, make_export_handler, folder_select_button=folder_select_button)
+	return dock_app
+
+def refresh_dock_app():
+	global dock_app
+	if dock_app:
+		viewer.window.remove_dock_widget(dock_app)
+	dock_app = make_dock_app()
+	viewer.window.add_dock_widget(dock_app)
+
+refresh_dock_app()
 
 napari.run()

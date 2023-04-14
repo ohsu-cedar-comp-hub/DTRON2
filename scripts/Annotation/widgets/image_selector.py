@@ -1,7 +1,7 @@
 from qtpy.QtWidgets import QComboBox
 from functools import partial
 from input_handler import InputHandler
-from qtpy.QtWidgets import QApplication, QMessageBox
+from util.ui import prompt_save_dialog
 import logging
 
 class ImageSelector(QComboBox):
@@ -28,26 +28,17 @@ class ImageSelector(QComboBox):
             return True
 
         export_handler = self.make_export_handler()
-        if export_handler and export_handler.is_updated():
-            reply = QMessageBox.question(
-                None,
-                'Save',
-                'There are unsaved changes. Do you want to save them before changing the selection?',
-                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel
-            )
+        if not export_handler or not export_handler.is_updated():
+            return True
 
-            if reply == QMessageBox.Cancel:
-                # Cancel the ComboBox selection change
-                self._rollback_to_persisted_index()
-                # cancel option is selected return false to indicate that
-                return False
+        def on_save():
+            export_handler.export_to_file()
 
-            if reply == QMessageBox.Save:
-                # Save changes
-                export_handler.export_to_file()
+        def on_cancel():
+            self._rollback_to_persisted_index()
 
-        # cancel option is not selected return true to indicate that
-        return True
+        prompt_text = 'There are unsaved changes. Do you want to save them before changing the selection?'
+        return prompt_save_dialog(prompt_text, on_save, on_cancel)
 
     def _rollback_to_persisted_index(self):
         self.blockSignals(True)

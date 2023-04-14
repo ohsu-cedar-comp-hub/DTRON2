@@ -1,6 +1,6 @@
 from qtpy.QtWidgets import QMessageBox
 
-def prompt_save_dialog(prompt_text, on_save, on_cancel):
+def prompt_save_dialog(prompt_text, on_save, on_cancel=None):
     # if export_handler and export_handler.is_updated():
     reply = QMessageBox.question(
         None,

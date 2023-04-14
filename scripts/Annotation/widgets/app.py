@@ -12,15 +12,16 @@ we could follow the click event and change the color of that cell temporarily.
 """
 
 class App(widgets.QWidget):
-	def __init__(self, folder_path, image_pattern, update_image, property_choices, make_export_handler):
+	def __init__(self, folder_path, image_pattern, update_image, property_choices, make_export_handler, folder_select_button):
 		super().__init__()
 		self.property_choices = property_choices
 		self._table_widget = None
-		self.initUI(folder_path, image_pattern, update_image, make_export_handler)
+		self.initUI(folder_path, image_pattern, update_image, make_export_handler, folder_select_button)
 		self._layer = None
 		self._make_export_handler = make_export_handler
+		update_image(None, None, None)
 
-	def initUI(self, folder_path, image_pattern, update_image, make_export_handler):
+	def initUI(self, folder_path, image_pattern, update_image, make_export_handler, folder_select_button):
 		self.setGeometry(700, 100, 350, 380)
 		self.layout = widgets.QVBoxLayout()
 		self.layout.setAlignment(Qt.AlignTop)
@@ -28,6 +29,7 @@ class App(widgets.QWidget):
 		self.save_button = widgets.QPushButton('Save Annotation Updates', self)
 		self.layout.addWidget(self.save_button)
 		self.layout.addWidget(self.refresh_table_button)
+		self.layout.addWidget(folder_select_button)
 
 		def handle_image_selection(image_file_name, image_file_path, annot_file_path):
 			layer = update_image(image_file_name, image_file_path, annot_file_path)

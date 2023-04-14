@@ -4,7 +4,7 @@ import numpy as np
 from napari import Viewer, gui_qt
 from .image_selector import ImageSelector
 from .annotation_table import AnnotationTable
-
+import os
 """
 Some thoughts:
 To make it more obvious which cell is being examined (when you click on the table),
@@ -27,6 +27,9 @@ class App(widgets.QWidget):
 		self.layout.setAlignment(Qt.AlignTop)
 		self.refresh_table_button = widgets.QPushButton('Refresh Annotations Table', self)
 		self.save_button = widgets.QPushButton('Save Annotation Updates', self)
+
+		self.selected_folder_label = self._make_selected_folder_label(folder_path)
+		self.layout.addWidget(self.selected_folder_label)
 		self.layout.addWidget(self.save_button)
 		self.layout.addWidget(self.refresh_table_button)
 		self.layout.addWidget(folder_select_button)
@@ -43,6 +46,25 @@ class App(widgets.QWidget):
 		self.setLayout(self.layout)
 		self.refresh_table_button.clicked.connect(self._refresh_table_widget)
 		self.save_button.clicked.connect(self._save_changes)
+
+	def _make_selected_folder_label(self, folder_path):
+		folder_name = os.path.basename(folder_path)
+		selected_folder_label = widgets.QLabel(f'Selected folder: {folder_name}')
+		selected_folder_label.setToolTip(folder_path)
+
+		selected_folder_label.setStyleSheet("""
+		    QLabel {
+		        font-family: "Arial";
+		        font-size: 14px;
+		        font-weight: bold;
+		        color: #ffffff;
+		        background-color: #3a9bce;
+		        padding: 5px;
+		        border-radius: 5px;
+		    }
+		""")
+
+		return selected_folder_label
 
 	def get_layer(self):
 		return self._layer

@@ -141,7 +141,7 @@ def on_folder_selected(selected_folder_path):
 	refresh_dock_app()
 
 
-folder_select_button = FolderSelectButton(initial_directory=curr_folder_path, on_folder_selected=on_folder_selected, make_export_handler=make_export_handler)
+folder_select_button = FolderSelectButton(text="Update Image Folder", initial_directory=curr_folder_path, on_folder_selected=on_folder_selected, make_export_handler=make_export_handler)
 
 dock_app = None
 

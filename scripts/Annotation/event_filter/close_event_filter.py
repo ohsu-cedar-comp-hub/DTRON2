@@ -1,5 +1,5 @@
 from qtpy.QtCore import QObject, QEvent
-from qtpy.QtWidgets import QApplication, QMessageBox
+from util.ui import prompt_save_dialog
 
 class CloseEventFilter(QObject):
     def __init__(self, viewer, make_export_handler):
@@ -14,14 +14,18 @@ class CloseEventFilter(QObject):
             if not export_handler or not export_handler.is_updated():
                 viewer.close()
             else:
-                reply = QMessageBox.question(None, 'Save', 'Do you want to save changes before closing?', QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
-                if reply == QMessageBox.Cancel:
-                    # Cancel close event
-                    event.ignore()
-                    return True
+                prompt_text = 'Do you want to save changes before closing?'
 
-                if reply == QMessageBox.Save:
+                def on_save():
                     export_handler.export_to_file()
+
+                def on_cancel():
+                    event.ignore()
+
+                canceled = not prompt_save_dialog(prompt_text, on_save, on_cancel)
+
+                if canceled:
+                    return True
 
                 viewer.close()
 

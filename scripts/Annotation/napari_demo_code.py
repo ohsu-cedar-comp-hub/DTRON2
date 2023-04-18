@@ -10,7 +10,7 @@ import numpy as np
 from widgets.app import App
 from input_handler import InputHandler
 from annotation_export_handler import AnnotationExportHandler
-from util.file import lazy_read, load_json_data
+from util.file import lazy_read, load_json_data, zarr_read
 from util.annotation import make_annotation_data
 from event_filter.close_event_filter import CloseEventFilter
 from qtpy.QtWidgets import QFileDialog
@@ -73,19 +73,24 @@ viewer.window._qt_window.installEventFilter(close_event_filter)
 
 #send to viewer
 # specify contrast_limits and multiscale=False with big data
-property_choices = {'class': [1,2], 'anno_style': ['manual','auto']} #doesn't do anything.
+property_choices = {'class': [1,2], 'anno_style': ['manual','auto'], 'metadata': None}
+
 def update_image(image_file_name, image_file_path, annot_file_path):
 	global curr_image_file_name, curr_image_file_path, curr_annot_file_path
 
 	curr_image_file_name, curr_image_file_path, curr_annot_file_path = image_file_name, image_file_path, annot_file_path
 	layers = list(viewer.layers)
 	for layer in layers:
-	    viewer.layers.remove(layer)
-
+		viewer.layers.remove(layer)
+	
 	if image_file_path is None:
 		return None
 
-	img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name,contrast_limits=[0,2000], multiscale=False)
+	if "ome.tif" in os.path.basename(image_file_path):
+		img_layer = viewer.add_image(zarr_read(image_file_path), name=image_file_name, contrast_limits=[0,255], rgb=True, multiscale=True)
+	else:
+		img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name, contrast_limits=[0,65000], rgb=False, multiscale=False)
+
 	if os.path.exists(annot_file_path):
 		#pull annotation data from json
 		anno_data = load_json_data(annot_file_path)
@@ -93,7 +98,7 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 		#will want to construct anno_data with the proper fields "image_name", "image_shape", "meta"
 		anno_data = {'image_name':image_file_name,
 					 'annotation': [],
-					 'features':{"anno_style":[], "class":[]},
+					 'features':{"anno_style":[], "class":[], "metadata":[]},
 					 }
 
 	###############################
@@ -109,12 +114,19 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 	# specify the display parameters for the text
 	text_parameters = {
 		'string': 'label: {class}\n{anno_style}',
-		'size': 6,
+		'size': 8,
 		'color': 'green',
 		'anchor': 'upper_left',
 		'translation': [-3, 0],
 		}
-	data = annotations or None
+	data = annotations or None 
+	"""
+	Sending None here causes an 'invalid value encountered in cast' error, associated with 'corners[:, displayed_axes] = data_bbox_clipped'
+	However, this does not break anything, just a minor annoyance.
+	Code Example:
+	viewer = napari.Viewer()
+	viewer.add_shapes(data=None, shape_type='polygon', name="Annotations")
+	"""
 	shapes_layer = viewer.add_shapes(data=data, shape_type='polygon', name="Shapes",
 		features = shape_features,
 		properties = shape_features,
@@ -130,9 +142,11 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 	# modify the default feature values
 	shapes_layer.feature_defaults['anno_style']='manual'
 	shapes_layer.feature_defaults['class']=1
+	shapes_layer.feature_defaults['metadata']=''
+	
 	return shapes_layer
 
-pattern = [".png", ".tif"]
+pattern = [".tif", ".png",  ".ome.tif"]
 
 def on_folder_selected(selected_folder_path):
 	global curr_folder_path

@@ -1,4 +1,6 @@
 from skimage.io import imread
+import tifffile
+import zarr
 import dask.array as da
 from dask import delayed
 import json
@@ -25,6 +27,20 @@ def lazy_read(filenames):
 	# stack.shape  # (2, 600, 64, 256, 280)
 
 	return stack
+
+def might_read(filenames):
+	sample = imread(filenames[0])
+	print(sample.dtype)
+	return sample
+
+def zarr_read(filename):
+	sample = tifffile.imread(filename, aszarr=True)
+	z = zarr.open(sample, mode='r')
+	print(z.info)
+	print(z[0].info)
+	dask_arrays = [da.from_zarr(z[int(dataset['path'])]) for dataset in z.attrs['multiscales'][0]['datasets']]
+	print(dask_arrays[0].dtype)	
+	return dask_arrays
 
 def load_json_data(pth):
 	with open(pth) as f:

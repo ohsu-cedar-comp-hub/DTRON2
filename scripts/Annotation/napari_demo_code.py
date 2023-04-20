@@ -18,22 +18,11 @@ from qtpy.QtWidgets import QFileDialog
 from widgets.folder_select_button import FolderSelectButton
 
 """
-BUGS:
+Future updates:
+It would be nice to select an annotation from the image and see it highlighted on the datatable.
 
-UNRESOLVED
-
-RESOLVED
-	####
-	  If you delete ALL the shapes and then put a new one, I think the properties and features is lost.
-	  Actually, the properties and features is fine. The table gets messed up, I think it isn't well adjusted if there is no entry.
-	  Ex: Delete all cells, update table (fine). Add a new shape, update table and you get nans.
-	  Oh.. My guess is something in set content goes awry.
-	####
-	  If starting from scratch on a new image, to make the table work, we need to initiate a shape layer. However, we can't pass
-	  an empty array of annotations to the shape layer, moreover from the error above I know that is a problem. So it seems we either cannot
-	  run the app if the shapes layer has not been intiated, or we need to wait to set its properties.
-
-
+Still need to figure out the default settings issue. It isn't a huge problem but just a pain. 
+It seems resetting feature_defaults doesn't do anything.
 """
 
 

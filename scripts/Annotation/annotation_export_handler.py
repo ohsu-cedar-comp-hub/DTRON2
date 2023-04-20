@@ -42,7 +42,6 @@ class AnnotationExportHandler:
 
     def export_to_file(self):
         current_content = self._get_current_content()
-        print(current_content)
         self.check_make_directory(self._annot_file_path)
         with open(self._annot_file_path,'w') as output_json_file:
             json.dump(current_content, output_json_file, cls=NpEncoder)

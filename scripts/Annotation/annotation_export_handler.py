@@ -32,8 +32,17 @@ class AnnotationExportHandler:
             file_content = load_json_data(self._annot_file_path)
 
         return current_content != file_content
+    
+    def check_make_directory(self, path):
+        """
+        Would previously error if the directory didn't exist, when called from export_to_file
+        """
+        if not os.path.isdir(os.path.dirname(path)):
+            os.mkdir(os.path.dirname(path))
 
     def export_to_file(self):
         current_content = self._get_current_content()
+        print(current_content)
+        self.check_make_directory(self._annot_file_path)
         with open(self._annot_file_path,'w') as output_json_file:
             json.dump(current_content, output_json_file, cls=NpEncoder)

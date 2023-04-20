@@ -30,11 +30,15 @@ class AnnotationTable(widgets.QTableWidget):
             if np.isnan(entry):
                 entry = self.property_choices[C][0]
 
-        if entry not in self.property_choices[C]:
-            logging.warn(f"Annotation {row} with {C} '{entry}' not in options {self.property_choices[C]}")
-            self.setItem(row, column, widgets.QTableWidgetItem(str(self._table[C][row])))
-            return
-        else:
+        if C != "metadata":
+            if entry not in self.property_choices[C]:
+                logging.warn(f"Annotation {row} with {C} '{entry}' not in options {self.property_choices[C]}")
+                self.setItem(row, column, widgets.QTableWidgetItem(str(self._table[C][row])))
+                return
+            else:
+                self._table[C][row] = entry
+                self.set_content(table=self._table)
+        else: #if it is metadata, it can be anything. Set the content as is.
             self._table[C][row] = entry
             self.set_content(table=self._table)
 

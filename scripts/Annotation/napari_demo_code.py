@@ -7,16 +7,15 @@ import napari
 import os
 import glob
 import numpy as np
+import colorcet as cc
 from widgets.app import App
 from input_handler import InputHandler
 from annotation_export_handler import AnnotationExportHandler
-from util.file import lazy_read, load_json_data
+from util.file import lazy_read, load_json_data, zarr_read
 from util.annotation import make_annotation_data
 from event_filter.close_event_filter import CloseEventFilter
 from qtpy.QtWidgets import QFileDialog
 from widgets.folder_select_button import FolderSelectButton
-
-#import psutil
 
 """
 BUGS:
@@ -73,19 +72,26 @@ viewer.window._qt_window.installEventFilter(close_event_filter)
 
 #send to viewer
 # specify contrast_limits and multiscale=False with big data
-property_choices = {'class': [1,2], 'anno_style': ['manual','auto']} #doesn't do anything.
+property_choices = {'class': list(range(20)), 'anno_style': ['manual','auto'], 'metadata': None}
+cmap = cc.glasbey_category10
+
 def update_image(image_file_name, image_file_path, annot_file_path):
 	global curr_image_file_name, curr_image_file_path, curr_annot_file_path
 
 	curr_image_file_name, curr_image_file_path, curr_annot_file_path = image_file_name, image_file_path, annot_file_path
+
 	layers = list(viewer.layers)
 	for layer in layers:
-	    viewer.layers.remove(layer)
-
+		viewer.layers.remove(layer)
+	
 	if image_file_path is None:
 		return None
 
-	img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name,contrast_limits=[0,2000], multiscale=False)
+	if "ome.tif" in os.path.basename(image_file_path):
+		img_layer = viewer.add_image(zarr_read(image_file_path), name=image_file_name, contrast_limits=[0,255], rgb=True, multiscale=True)
+	else:
+		img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name, contrast_limits=[0,65000], rgb=False, multiscale=False)
+
 	if os.path.exists(annot_file_path):
 		#pull annotation data from json
 		anno_data = load_json_data(annot_file_path)
@@ -93,46 +99,64 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 		#will want to construct anno_data with the proper fields "image_name", "image_shape", "meta"
 		anno_data = {'image_name':image_file_name,
 					 'annotation': [],
-					 'features':{"anno_style":[], "class":[]},
+					 'features':{"anno_style":[], "class":[], "metadata":[]},
 					 }
 
 	###############################
 
 	annotations = anno_data["annotation"] #should be in the form of a list of numpy arrays (Z x Row x Col)
 	annotations = [np.array(x) for x in annotations]
-	shape_features = anno_data["features"]#should be a dictionary with keys 'class', 'anno_style'
+	shape_features = anno_data["features"]#should be a dictionary with keys 'class', 'anno_style', 'metadata'
 	#determine colors; should be equal to number of classes.
+	#curr_props = {'class':0, 'anno_style':'manual','metadata':''}
 
-	face_color_cycle=['royalblue','green'] #WILL REPRESENT CLASS, assuming only two classes. In the future we can import a cycling color library, colorcet.
-	edge_color_cycle=['red','blue']
+	# face_color_cycle=['royalblue','green'] #WILL REPRESENT CLASS, assuming only two classes. In the future we can import a cycling color library, colorcet.
+	# edge_color_cycle=['red','blue']
+
+	face_color_cycle = [cmap[x] for x in range(len(property_choices['class']))]
+	edge_color_cycle = [cmap[x] for x in range(len(property_choices['anno_style']))]
+
+	edge_color_inds = [property_choices['anno_style'].index(x) if x in property_choices['anno_style'] else 0 for x in shape_features['anno_style']]
+	face_color_inds = [property_choices['class'].index(x) if x in property_choices['class'] else 0 for x in shape_features['class']]
+	edge_colors = [edge_color_cycle[i] for i in edge_color_inds]
+	face_colors = [face_color_cycle[i] for i in face_color_inds]
+	if len(edge_colors)==0:
+		edge_colors='anno_style'
+	if len(face_colors)==0:
+		face_colors='class'
 
 	# specify the display parameters for the text
 	text_parameters = {
-		'string': 'label: {class}\n{anno_style}',
-		'size': 6,
+		'string': 'class: {class}\n{anno_style}',
+		'size': 8,
 		'color': 'green',
 		'anchor': 'upper_left',
 		'translation': [-3, 0],
 		}
-	data = annotations or None
+	data = annotations or None 
+	"""
+	Sending None here causes an 'invalid value encountered in cast' error, associated with 'corners[:, displayed_axes] = data_bbox_clipped'
+	However, this does not break anything, just a minor annoyance.
+	Code Example:
+	viewer = napari.Viewer()
+	viewer.add_shapes(data=None, shape_type='polygon', name="Annotations")
+	"""
+
 	shapes_layer = viewer.add_shapes(data=data, shape_type='polygon', name="Shapes",
 		features = shape_features,
 		properties = shape_features,
-		edge_color='anno_style',
+		edge_color = edge_colors,
 		edge_color_cycle = edge_color_cycle,
 		edge_width=2,
-		face_color='class',
-		face_color_cycle=face_color_cycle,
+		face_color = face_colors,
+		face_color_cycle = face_color_cycle,
 		property_choices = property_choices,
 		opacity=0.4,
 		text = text_parameters)
-
-	# modify the default feature values
-	shapes_layer.feature_defaults['anno_style']='manual'
-	shapes_layer.feature_defaults['class']=1
+	
 	return shapes_layer
 
-pattern = [".png", ".tif"]
+pattern = [".tif", ".png",  ".ome.tif"]
 
 def on_folder_selected(selected_folder_path):
 	global curr_folder_path
@@ -158,4 +182,7 @@ def refresh_dock_app():
 
 refresh_dock_app()
 
-napari.run()
+#look for interactive shell, if not do not run napari.run()
+import sys
+if not bool(getattr(sys, 'ps1', sys.flags.interactive)):
+	napari.run() #commenting this out enables more interactivity at the command line

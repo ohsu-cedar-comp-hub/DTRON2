@@ -182,5 +182,7 @@ def refresh_dock_app():
 
 refresh_dock_app()
 
-
-#napari.run() #commenting this out enables more interactivity at the command line
+#look for interactive shell, if not do not run napari.run()
+import sys
+if not bool(getattr(sys, 'ps1', sys.flags.interactive)):
+	napari.run() #commenting this out enables more interactivity at the command line

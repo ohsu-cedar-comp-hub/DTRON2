@@ -17,6 +17,8 @@ class AnnotationTable(widgets.QTableWidget):
             self.set_content({})
 
         self.cellChanged.connect(self.onCellChanged)
+        self.cellClicked.connect(self.onCellClicked)
+
 
     def onCellChanged(self, row, column):
         text = self.item(row, column).text()
@@ -41,6 +43,10 @@ class AnnotationTable(widgets.QTableWidget):
         else: #if it is metadata, it can be anything. Set the content as is.
             self._table[C][row] = entry
             self.set_content(table=self._table)
+    
+    def onCellClicked(self, row, column):
+        clicked_row = row
+        self._layer.selected_data = {clicked_row}
 
     def set_content(self, table: dict, init=False):
         if table is None:

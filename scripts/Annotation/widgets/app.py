@@ -39,6 +39,9 @@ class App(widgets.QWidget):
 			self._layer = layer
 			self._refresh_table_widget()
 			self.setLayout(self.layout)
+			# Attach the callback function to the shapes layer's events
+			#self._layer.events.highlight.connect(self.on_polygon_click) # works, but overactive
+			self._layer.events.current_properties.connect(self.on_polygon_click) #activates when the current properties change
 
 		image_selector = ImageSelector(folder_path, image_pattern, on_item_selected=handle_image_selection, make_export_handler=make_export_handler)
 		self.layout.addWidget(image_selector)
@@ -94,3 +97,11 @@ class App(widgets.QWidget):
 	def _refresh_table_widget(self):
 		self._clear_table_widget()
 		self._add_table_widget()
+
+	def on_polygon_click(self, event):
+		layer = self._layer
+		if layer and layer.features.shape[0]>0:
+			# Check if any shapes were clicked on
+			indices = layer.selected_data
+			if indices:
+				self._table_widget.selectRow(list(indices)[0])

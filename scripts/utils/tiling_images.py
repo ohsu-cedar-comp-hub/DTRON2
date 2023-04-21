@@ -34,6 +34,45 @@ retiled_image, output_mask = stitch_image(tiles['tile_size'],tiles)
 tiffile.imwrite("<your output file>", output_mask, photometric='minisblack'))
 
 """
+def save_tiles(tiles):
+    import tifffile
+    for i, tile in enumerate(tiles['image']):
+        tifffile.imwrite(os.path.join("/Users/fennerm/Documents/NVIDIA/Scripts", "im_{}.tif".format(i)),
+                         np.moveaxis(tile, 0, 2))
+
+def load_mask_tiles(mask_path):
+    import tifffile
+    mask_names = find_file_names(mask_path, ['*.tif'])
+    return [tifffile.imread(os.path.join(mask_path, x))>0 for x in mask_names]
+
+def find_file_names(path, pattern, recursive=False):
+    import glob
+    """
+    PURPOSE: Imports ALL files from a chosen folder based on a given pattern
+    INPUTS
+    -------------------------------------------------------------
+    pattern : list of strings with particular patterns, including filetype!
+            ex: ["_patched",".csv"] will pull any csv files under filepath with the string "_patched" in its file name.
+    filepath : string, path for where to search for files
+            ex: "/users/<username>/folder"
+    recursive : boolean, True if you wish for the search for files to be recursive under filepath.
+    """
+    # generate pattern finding
+    fpatterns = ["**{}".format(x) for i, x in enumerate(pattern)]
+    all_file_names = set()
+    for fpattern in fpatterns:
+        file_paths = glob.iglob(os.path.join(path, fpattern), recursive=recursive)
+        for file_path in file_paths:
+            # skip hidden files
+            if file_path[0] == ".":
+                continue
+            file_name = os.path.basename(file_path)
+            all_file_names.add(file_name)
+    all_file_names = [file_name for file_name in all_file_names]
+    all_file_names.sort()  # sort based on name
+    return all_file_names
+
+
 def tile_image(image, tile_size=512, p_overlap=0.15):
     """
     INPUTS
@@ -193,8 +232,8 @@ def stitch_image(tile_size, tiles):
             
             mask[ri:rend,ci:cend] = np.where(this_mask > mask[ri:rend,ci:cend], this_mask, mask[ri:rend,ci:cend])
 
-        image = image[...,0:tiles['init_shape'][0],0:tiles['init_shape'][1]]
-        mask = mask[0:tiles['init_shape'][0],0:tiles['init_shape'][1]]
+        image = image[...,0:tiles['init_shape'][1],0:tiles['init_shape'][2]]
+        mask = mask[0:tiles['init_shape'][1],0:tiles['init_shape'][2]]
     
     else:
         mask = []

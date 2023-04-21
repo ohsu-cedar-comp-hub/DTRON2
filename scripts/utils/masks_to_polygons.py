@@ -122,7 +122,7 @@ def create_annotations(annotation_path, size_thresh=250, reduce_vertices=True):
     annotated_image = tifffile.imread(annotation_path)
     assert len(annotated_image.shape)==2, "The loaded annotated image has shape {}, but we require shape (H x W)"
 
-    [segmentations_x, segmentations_y, _] = mask_to_polygon_skimage(annotated_image, size_thresh)
+    [segmentations_y, segmentations_x, _] = mask_to_polygon_skimage(annotated_image, size_thresh)
 
     all_annotations = [[[x,y] for (x,y) in zip(ix,iy)] for (ix,iy) in zip(segmentations_x, segmentations_y)]
     if reduce_vertices:

@@ -29,6 +29,7 @@ def lazy_read(filenames):
 
 	return stack
 
+
 def zarr_read(filename, split_channels = False):
 	"""
 	split_channels = boolean, True if you want to display multichanneled images seperately rather than together.
@@ -50,7 +51,6 @@ def zarr_read(filename, split_channels = False):
 		dask_arrays = [[x[ch_i, ...] for x in dask_arrays] for ch_i in range(len(channel_names)) ] #list of lists to be split.
 	
 	return dask_arrays, channel_names
-
 
 
 def load_json_data(pth):

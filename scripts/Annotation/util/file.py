@@ -4,6 +4,7 @@ import zarr
 import dask.array as da
 from dask import delayed
 import json
+from xml.etree import ElementTree
 
 def lazy_read(filenames):
 	#note that files can be multichanneled, hence 'filenames'
@@ -28,11 +29,29 @@ def lazy_read(filenames):
 
 	return stack
 
-def zarr_read(filename):
+
+def zarr_read(filename, split_channels = False):
+	"""
+	split_channels = boolean, True if you want to display multichanneled images seperately rather than together.
+	Use for cycIF or H&E where we don't care to see channel names -- i.e. not split.
+	"""
+	#grab the channel name metadata
+	if split_channels:
+		with tifffile.TiffFile(filename) as tif:
+			metadta = ElementTree.fromstring(tif.series[0].pages[0].description)
+		metadta = metadta[0][0]
+		channel_names = [(x.attrib)['Name'] for x in metadta if len(x)>0]
+	else:
+		channel_names = []
 	sample = tifffile.imread(filename, aszarr=True)
 	z = zarr.open(sample, mode='r')
 	dask_arrays = [da.from_zarr(z[int(dataset['path'])]) for dataset in z.attrs['multiscales'][0]['datasets']]
-	return dask_arrays
+	#added CE 042423 :: want to display multiple channels and selectively turn on or off each.
+	if split_channels:
+		dask_arrays = [[x[ch_i, ...] for x in dask_arrays] for ch_i in range(len(channel_names)) ] #list of lists to be split.
+	
+	return dask_arrays, channel_names
+
 
 def load_json_data(pth):
 	with open(pth) as f:

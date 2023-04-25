@@ -1,7 +1,12 @@
 import numpy as np
 import qtpy.QtWidgets as widgets
+from qtpy.QtGui import QColor
 from napari import Viewer, gui_qt
 import logging
+
+# set up the background color
+red = QColor(255, 0, 0)
+white = QColor(255, 255, 255)
 
 class AnnotationTable(widgets.QTableWidget):
     def __init__(self, parent):
@@ -18,11 +23,14 @@ class AnnotationTable(widgets.QTableWidget):
 
         self.cellChanged.connect(self.onCellChanged)
         self.cellClicked.connect(self.onCellClicked)
+        #self.currentItemChanged.connect(self.set_selected_cell_background)
 
 
     def onCellChanged(self, row, column):
         text = self.item(row, column).text()
         C = list(self._table.keys())[column]
+        #ALSO, if MULTIPLE OBJECTS ARE SELECTED WHILE BEING CHANGED, CHANGE ALL SIMULTANEOUSLY
+        #should be in self._layer.selected_data
         try:
             entry = float(text)
         except:
@@ -32,21 +40,41 @@ class AnnotationTable(widgets.QTableWidget):
             if np.isnan(entry):
                 entry = self.property_choices[C][0]
 
-        if C != "metadata":
-            if entry not in self.property_choices[C]:
-                logging.warn(f"Annotation {row} with {C} '{entry}' not in options {self.property_choices[C]}")
-                self.setItem(row, column, widgets.QTableWidgetItem(str(self._table[C][row])))
-                return
-            else:
+        for row in self._layer.selected_data:
+            if C != "metadata":
+                if entry not in self.property_choices[C]:
+                    logging.warn(f"Annotation {row} with {C} '{entry}' not in options {self.property_choices[C]}")
+                    self.setItem(row, column, widgets.QTableWidgetItem(str(self._table[C][row])))
+                    return
+                else:
+                    self._table[C][row] = entry
+                    self.set_content(table=self._table)
+            else: #if it is metadata, it can be anything. Set the content as is.
                 self._table[C][row] = entry
                 self.set_content(table=self._table)
-        else: #if it is metadata, it can be anything. Set the content as is.
-            self._table[C][row] = entry
-            self.set_content(table=self._table)
     
     def onCellClicked(self, row, column):
-        clicked_row = row
-        self._layer.selected_data = {clicked_row}
+        if row not in self._layer.selected_data:
+            self._layer.selected_data = set(list(self._layer.selected_data)+[row])
+            self._layer.stored_selection = list(set(list(self._layer.selected_data)+[row]))
+        else:
+            #we deselected it. We should toggle the selection on the layer.
+            good_data = list(set([x for x in self._layer.selected_data if x!=row]))
+            self._layer.selected_data = set(good_data)
+            self._layer.stored_selection = good_data
+            #toggle the layer. 
+
+    # def set_selected_cell_background(self):
+    #     current = self.currentItem()
+    #     if current:
+    #         current.setBackground(red)
+    #     try:
+    #         previous = self.previousItem() 
+    #         print('previous')
+    #         if previous:
+    #             previous.setBackground(white)
+    #     except:
+    #         pass
 
     def set_content(self, table: dict, init=False):
         if table is None:

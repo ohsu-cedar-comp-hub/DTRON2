@@ -20,6 +20,7 @@ class App(widgets.QWidget):
 		self._layer = None
 		self._make_export_handler = make_export_handler
 		update_image(None, None, None)
+		self.stored_selection = []
 
 	def initUI(self, folder_path, image_pattern, update_image, make_export_handler, folder_select_button):
 		self.setGeometry(700, 100, 350, 380)
@@ -41,7 +42,11 @@ class App(widgets.QWidget):
 			self.setLayout(self.layout)
 			# Attach the callback function to the shapes layer's events
 			#self._layer.events.highlight.connect(self.on_polygon_click) # works, but overactive
-			self._layer.events.current_properties.connect(self.on_polygon_click) #activates when the current properties change
+			if self._layer:
+				self._layer.events.highlight.connect(self.on_polygon_click) # works, but overactive
+				self.stored_selection = []
+				#self._layer.events.current_properties.connect(self.on_polygon_click) #activates when the current properties change
+				#note that current_properties won't update if you select an object with the same properties.
 
 		image_selector = ImageSelector(folder_path, image_pattern, on_item_selected=handle_image_selection, make_export_handler=make_export_handler)
 		self.layout.addWidget(image_selector)
@@ -95,13 +100,66 @@ class App(widgets.QWidget):
 			self.layout.addWidget(self._table_widget)
 
 	def _refresh_table_widget(self):
+		if self._layer and hasattr(self._layer, 'stored_selection'):
+			self.stored_selection = self._layer.stored_selection
 		self._clear_table_widget()
 		self._add_table_widget()
+		if self._table_widget:
+			self._table_widget.setSelectionBehavior(widgets.QAbstractItemView.SelectRows) 
+			self._table_widget.setSelectionMode(widgets.QAbstractItemView.MultiSelection)
+			self._table_widget.setEditTriggers(widgets.QAbstractItemView.DoubleClicked)
+			self._table_widget.setFocusPolicy(Qt.NoFocus)
+			self._layer.selected_data = set(self.stored_selection)
+			self._layer.stored_selection = self.stored_selection
+			for rr in self._layer.selected_data:
+				self._table_widget.selectRow(rr)
 
 	def on_polygon_click(self, event):
 		layer = self._layer
 		if layer and layer.features.shape[0]>0:
-			# Check if any shapes were clicked on
-			indices = layer.selected_data
-			if indices:
-				self._table_widget.selectRow(list(indices)[0])
+			if self._table_widget:
+				# Check if any shapes were clicked on
+				indices = layer.selected_data
+				if indices:
+					#if len(indices)>=len(self.stored_selection):
+					newrow = [r for r in list(indices) if r not in layer.stored_selection]
+					rmrow = [r for r in layer.stored_selection if r not in list(indices)]
+					toggle_rows = newrow+rmrow 
+					if toggle_rows:
+						for rr in toggle_rows:
+							self._table_widget.selectRow(rr)
+						
+						self._layer.stored_selection = list(indices)
+						self.stored_selection = list(indices)
+				else:
+					#sometimes the table elements get left turned on 
+					#they are left in self._layer.stored_selection, and the self.stored_selection may be wrong.
+					rmrow = [r for r in layer.stored_selection]
+					if rmrow:
+						for rr in rmrow:
+							self._table_widget.selectRow(rr)
+						self._layer.stored_selection = []
+						self.stored_selection = [] 
+				###Removed this code, but it scans the datatable as finds the active rows, if desired.
+				# selected_ranges = self._table_widget.selectedRanges()
+				# selected_rows = set()
+				# for selected_range in selected_ranges:
+				# 	for row in range(selected_range.topRow(), selected_range.bottomRow()+1):
+				# 		selected_rows.add(row)
+				# #if any in selected rows that are not in self.stored_selection, toggle them off.
+				# addto_deck = [x for x in self.stored_selection if x not in selected_rows]
+				# rmfrom_deck = [x for x in selected_rows if x not in self.stored_selection]
+				# toggle_rows = addto_deck + rmfrom_deck
+				# if toggle_rows:
+				# 	print('deck:{}'.format(toggle_rows))
+				# 	for rr in rmfrom_deck:
+				# 			self._table_widget.selectRow(rr)
+			
+
+				
+
+
+
+
+
+

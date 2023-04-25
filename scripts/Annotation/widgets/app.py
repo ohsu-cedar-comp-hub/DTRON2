@@ -47,8 +47,8 @@ class App(widgets.QWidget):
 				self.stored_selection = []
 				#self._layer.events.current_properties.connect(self.on_polygon_click) #activates when the current properties change
 				#note that current_properties won't update if you select an object with the same properties.
-			if self._table_widget:
-				self._table_widget.cellChanged.connect(self.onCellChanged)
+				if self._table_widget:
+					self._table_widget.cellChanged.connect(self.onCellChanged)
 
 		image_selector = ImageSelector(folder_path, image_pattern, on_item_selected=handle_image_selection, make_export_handler=make_export_handler)
 		self.layout.addWidget(image_selector)

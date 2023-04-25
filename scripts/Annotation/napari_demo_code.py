@@ -16,6 +16,14 @@ from util.annotation import make_annotation_data
 from event_filter.close_event_filter import CloseEventFilter
 from qtpy.QtWidgets import QFileDialog
 from widgets.folder_select_button import FolderSelectButton
+import vispy.color
+
+"""
+Currently, loading an empty viewer image results in a runtimewarning, likely due to a version bug.
+For now, we filter and ignore those warnings so they do not interere with our try, except statements.
+"""
+import warnings
+warnings.simplefilter("ignore", RuntimeWarning)
 
 """
 Future updates:
@@ -77,9 +85,31 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 		return None
 
 	if "ome.tif" in os.path.basename(image_file_path):
-		img_layer = viewer.add_image(zarr_read(image_file_path), name=image_file_name, contrast_limits=[0,255], rgb=True, multiscale=True)
+		try:
+			IM, _ = zarr_read(image_file_path, split_channels=False)
+			img_layer = viewer.add_image(IM, name=image_file_name, contrast_limits=[0, 255], rgb=True, multiscale=True)
+			"""
+			Exiting due to RuntimeWarning: invalid value encountered in cast
+  							corners[:, displayed_axes] = data_bbox_clipped
+			when loading with no annotations
+			"""
+		except:
+			#load cyclic IF data and display the channels independently.
+			#the alternative is just to call 
+			#img_layer = viewer.add_image(zarr_read(image_file_path), name=image_file_name, contrast_limits=[0,255], rgb=False, multiscale=True)
+			#which will pull up a slider below the image.
+			IM, ch_names = zarr_read(image_file_path, split_channels=True)
+			#https://forum.image.sc/t/viewing-channel-name-in-multi-channel-image/35830/4
+			contrast_max = (255 if IM[0][0].dtype==np.uint8 else 65535)
+			cmap_counter=0
+			for ch_i, channel in reversed(list(enumerate(ch_names))):
+				this_cmap = vispy.color.Colormap([[0.0,0.0,0.0], cmap[ch_i]])
+				img_layer = viewer.add_image(IM[ch_i], name=channel, contrast_limits=[0,contrast_max], rgb=False, multiscale=True, visible=(True if ch_i==0 else False), blending='additive', colormap = this_cmap)
 	else:
-		img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name, contrast_limits=[0,65000], rgb=False, multiscale=False)
+		try:
+			img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name, contrast_limits=[0,2000], rgb=True, multiscale=False)
+		except:
+			img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name, contrast_limits=[0,2000], rgb=False, multiscale=False)
 
 	if os.path.exists(annot_file_path):
 		#pull annotation data from json
@@ -97,7 +127,7 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 	annotations = [np.array(x) for x in annotations]
 	shape_features = anno_data["features"]#should be a dictionary with keys 'class', 'anno_style', 'metadata'
 	#determine colors; should be equal to number of classes.
-	#curr_props = {'class':0, 'anno_style':'manual','metadata':''}
+	curr_props = {'class':0, 'anno_style':'manual', 'metadata':''}
 
 	# face_color_cycle=['royalblue','green'] #WILL REPRESENT CLASS, assuming only two classes. In the future we can import a cycling color library, colorcet.
 	# edge_color_cycle=['red','blue']
@@ -142,6 +172,12 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 		property_choices = property_choices,
 		opacity=0.4,
 		text = text_parameters)
+
+	if not data:
+		#need some default behavior if no previous shape exists to draw from.
+		shapes_layer.feature_defaults['class']=0
+		shapes_layer.feature_defaults['anno_style']='manual'
+		shapes_layer.feature_defaults['metadata']=''
 	
 	return shapes_layer
 

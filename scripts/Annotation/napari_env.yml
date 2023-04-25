@@ -1,0 +1,21 @@
+name: napari-env
+channels:
+  - bioconda
+  - defaults
+  - conda-forge
+  - anaconda
+dependencies:
+  - python==3.9
+  - napari
+  - napari-skimage-regionprops
+  - colorcet
+  - tifffile 
+  - qtpy
+  - scipy
+  - dask
+  - numpy
+  - scikit-image
+  - pandas
+  - zarr
+  - json
+prefix: /Users/eddyc/opt/anaconda3/envs/napari-env

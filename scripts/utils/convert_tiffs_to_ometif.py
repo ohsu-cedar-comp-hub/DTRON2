@@ -1,10 +1,9 @@
 """
+#############################################################
 AUTHOR: CHRISTOPHER EDDY (eddy6081@gmail.com)
 DATE: 10/27/20, Updated for CycIF 04/11/23
 PURPOSE: SAVE Raw tiff files into a single OME.TIF file.
 ########################################################
-
-#############################################################
 """
 
 """
@@ -15,11 +14,18 @@ series_names, image_names = MM.read_filenames(image_pattern=".tif")
 image_names = MM.reorder_cyc_IF_files(image_names)
 
 ### USE ONE OF THE FOLLOWING DEPENDING ON YOUR NEEDS
+
+#### For simple applications without the need of metadata
 MM.run_simple_ometif_save(series_names, image_names) #does not save any metadata, does not do tiling, etc. 
-## OR run this for saving multichannel cyclic IF data
+
+#### FOR CYC-IF DATA #####
+## run this for saving multichannel cyclic IF data - will load each file into memory and hold it until complete.
 MM.run_bigtif_ometif_save(series_names,image_names) # see optional arguments to include resolution and channel names!
-## OR run this to save pyramidal structure, tiled H&E images.
-MM.run_bigtif_ometif_HandE_save(series_names, image_names, resolutionunit=None, use_compression=True) # see optional arguments
+## run this for saving multichannel IF data - will load each file as a zarr object, calling it when necessary. Particularly useful if microscope saves tiles as default in .tifs.
+MM.run_bigtif_ometif_save_zarr(series_names,image_names) # see optional arguments to include resolution and channel names!
+
+##### FOR H&E images #####
+MM.run_bigtif_ometif_HandE_save(series_names, image_names, resolutionunit=None, use_compression=False) # see optional arguments
 """
 
 ###GENERATE TRAINING GRAY FILES
@@ -27,6 +33,7 @@ import tifffile
 import numpy as np
 import os, sys
 from tifffile import TiffWriter
+import zarr
 
 class Make_OME_TIFS(object):
 
@@ -119,14 +126,20 @@ class Make_OME_TIFS(object):
         print("Complete :) \n")
 
     #channel names can be determined from Ece or filenames, but could be passed here!
-    def run_bigtif_ometif_save(self, unique_series_name, im_names, channel_names = None, pixelsize = None, resolutionunit='CENTIMETER', subresolutions = 2, tilesize=512):
+    #@profile
+    def run_bigtif_ometif_save(self, unique_series_name, im_names, channel_names = None, pixelsize = None, resolutionunit='CENTIMETER', subresolutions = 2, tilesize=512, use_compression = False):
         """
         pixelsize = float, microns / pixel
         subresolution = int, number of magnifications to compress image for pyramid structure
         tilesize = int, size of tiles in pixels
+        use_compression = 'jpeg' or None or False
         """
+        #init_util = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
         assert resolutionunit in ["MILLIMETER", "CENTIMETER", None], "argument 'resolutionunit' was {}, but must be in {}".format(resolutionunit, ["MILLIMETER", "CENTIMETER"])
-        
+          
+        if use_compression:
+            use_compression = 'jpeg'
+
         if resolutionunit=="MILLIMETER":
             conversion = 1e3 #microns/millimeter 
         elif resolutionunit=="CENTIMETER":
@@ -153,6 +166,7 @@ class Make_OME_TIFS(object):
                 options = dict(
                     photometric='minisblack',
                     tile=(tilesize, tilesize),
+                    compression = use_compression,
                     resolutionunit='CENTIMETER'
                 )
 
@@ -177,7 +191,7 @@ class Make_OME_TIFS(object):
                     'Channel': {'Name': channel_names},
                     'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
                     }
-
+                #self.checking_in()
                 tif.write(
                         images,
                         subifds=subresolutions,
@@ -186,6 +200,7 @@ class Make_OME_TIFS(object):
                         **options
                 )
 
+                #self.checking_in()
                 # write pyramid levels to the two subifds
                 # in production use resampling to generate sub-resolution images
                 for level in range(subresolutions):
@@ -196,11 +211,17 @@ class Make_OME_TIFS(object):
                         resolution=(conversion / mag / pixelsize, conversion / mag / pixelsize),
                         **options
                     )
+                
+                #self.checking_in()
                 # add a thumbnail image as a separate series
                 # it is recognized by QuPath as an associated image
-                thumbnail = (images[0, ::8, ::8] >> 2)#.astype('uint8')
+                thumbnail = (images[0, ::16, ::16] >> 2)#.astype('uint8')
                 tif.write(thumbnail, metadata={'Name': 'thumbnail'})
 
+            tif.close()
+
+        #final_util = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+        #print(final_util - init_util)
         progbar(len(unique_series_name),len(unique_series_name),20)
         print("\n")
         print("Complete :) \n")
@@ -249,11 +270,11 @@ class Make_OME_TIFS(object):
                         'axes': 'YXS',
                         'SignificantBits': 10,
                         'PhysicalSizeX': pixelsize,
-                        'PhysicalSizeXUnit': 'Âµm',
+                        'PhysicalSizeXUnit': 'µm',
                         'PhysicalSizeY': pixelsize,
-                        'PhysicalSizeYUnit': 'Âµm',
+                        'PhysicalSizeYUnit': 'µm',
                         'Channel': {'Name': channel_names},
-                        'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['Âµm'] * 16}
+                        'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
                     }
                     options = dict(
                         photometric='rgb',
@@ -269,7 +290,7 @@ class Make_OME_TIFS(object):
                         'PhysicalSizeX': pixelsize,
                         'PhysicalSizeY': pixelsize,
                         'Channel': {'Name': channel_names},
-                        'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['Âµm'] * 16}
+                        'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
                     }
                     options = dict(
                         photometric='rgb',
@@ -307,7 +328,119 @@ class Make_OME_TIFS(object):
         print("\n")
         print("Complete :) \n")
 
+    #@profile
+    def run_bigtif_ometif_save_zarr(self, unique_series_name, im_names, channel_names = None, pixelsize = None, resolutionunit='CENTIMETER', subresolutions = 2, tilesize=512, use_compression = False):
+        """
+        Purpose:
+        If the images were saved with a tiling format, using Zarr can be more memory efficient to write the image. 
+        
+        pixelsize = float, microns / pixel
+        subresolution = int, number of magnifications to compress image for pyramid structure
+        tilesize = int, size of tiles in pixels
+        use_compression = 'jpeg' or None or False
+        """
+        #init_util = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+        assert resolutionunit in ["MILLIMETER", "CENTIMETER", None], "argument 'resolutionunit' was {}, but must be in {}".format(resolutionunit, ["MILLIMETER", "CENTIMETER"])
+          
+        if use_compression:
+            use_compression = 'jpeg'
 
+        if resolutionunit=="MILLIMETER":
+            conversion = 1e3 #microns/millimeter 
+        elif resolutionunit=="CENTIMETER":
+            conversion = 1e4 # microns/millimeter?
+
+        if pixelsize is None:
+            pixelsize = 1 #throw a default option here.
+            conversion = 1.
+            
+        for num,series in enumerate(unique_series_name):
+            progbar(num,len(unique_series_name),20)
+            
+            filenames = [os.path.join(self.image_dir,image_name) for image_name in im_names]
+            images_zarr = tifffile.imread(filenames, aszarr=True) 
+            #convert to zarr array
+            images_zarr = zarr.open(images_zarr, mode='r')
+            #now the images should be C x Y x X.
+            assert len(images_zarr.shape)==3, "'images' has shape {}, needs to be shape (Channels x X x Y), or you need to adjust function run_bigtif_ometif_save".format(images.shape)
+            shape = images_zarr.shape
+            if channel_names is None:
+                channel_names = ["Channel {}".format(i) for i in range(len(im_names))]
+
+            with TiffWriter(os.path.join(self.save_dir,series+".ome.tif").replace(" ", "_"), bigtiff=True, imagej=False) as tif:
+
+                options = dict(
+                    photometric='minisblack',
+                    tile=(tilesize, tilesize),
+                    compression = use_compression,
+                    resolutionunit=resolutionunit
+                )
+
+                if resolutionunit is not None:
+                    print("here instead")
+                    metadata={
+                        'PhysicalSizeX': pixelsize,
+                        'PhysicalSizeXUnit': 'µm',
+                        'PhysicalSizeY': pixelsize,
+                        'PhysicalSizeYUnit': 'µm',
+                        'Channel': {'Name': channel_names},
+                        'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
+                    }
+
+                else:
+                    print("here")
+                    metadata={
+                    'Channel': {'Name': channel_names},
+                    'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
+                    }
+                    #Create the OME metadata dictionary
+                #self.checking_in()
+                tif.write(
+                    images_zarr,
+                    subifds=subresolutions,
+                    resolution=(conversion / pixelsize, conversion / pixelsize),
+                    metadata=metadata,
+                    **options
+                )
+
+                # write pyramid levels to the two subifds
+                # in production use resampling to generate sub-resolution images
+                #self.checking_in()
+                
+                for level in range(subresolutions):
+                    mag = 2**(level + 1)
+                    tif.write(
+                        images_zarr[:, ::mag, ::mag],
+                        subfiletype=0,
+                        resolution=(conversion / mag / pixelsize, conversion / mag / pixelsize),
+                        **options
+                    )
+
+                #self.checking_in()
+                # add a thumbnail image as a separate series
+                # it is recognized by QuPath as an associated image
+                thumbnail = (images_zarr[0, ::16, ::16] >> 2)#.astype('uint8')
+                tif.write(thumbnail, metadata={'Name': 'thumbnail'})
+
+            tif.close()
+
+
+        #final_util = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+        #print(final_util - init_util)
+        progbar(len(unique_series_name),len(unique_series_name),20)
+        print("\n")
+        print("Complete :) \n")
+
+    #@profile
+    def checking_in(self):
+        print('yes')
+
+
+    #@profile
+    def checking_in(self):
+        print('yes')
+
+    
 
 #
 def progbar(curr, total, full_progbar):

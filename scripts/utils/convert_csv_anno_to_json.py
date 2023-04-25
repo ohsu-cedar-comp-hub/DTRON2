@@ -44,7 +44,7 @@ def convert_data(csv_filepath, image_name, output_path = None):
     annotations = []
     for anno_i in csv_data['index'].unique():
         dta = csv_data.loc[csv_data['index']==anno_i]
-        poly_i = [[0,x,y] for (x,y) in zip(list(dta['axis-0']), list(dta['axis-1']))]
+        poly_i = [[x,y] for (x,y) in zip(list(dta['axis-0']), list(dta['axis-1']))]
         annotations.append(poly_i)
 
     #prepare JSON output.

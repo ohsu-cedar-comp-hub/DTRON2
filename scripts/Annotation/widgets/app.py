@@ -47,6 +47,8 @@ class App(widgets.QWidget):
 				self.stored_selection = []
 				#self._layer.events.current_properties.connect(self.on_polygon_click) #activates when the current properties change
 				#note that current_properties won't update if you select an object with the same properties.
+			if self._table_widget:
+				self._table_widget.cellChanged.connect(self.onCellChanged)
 
 		image_selector = ImageSelector(folder_path, image_pattern, on_item_selected=handle_image_selection, make_export_handler=make_export_handler)
 		self.layout.addWidget(image_selector)
@@ -73,6 +75,11 @@ class App(widgets.QWidget):
 		""")
 
 		return selected_folder_label
+	
+	def onCellChanged(self, row, column):
+		if self._layer:
+			if len(self._layer.selected_data)>1:
+				self._refresh_table_widget()
 
 	def get_layer(self):
 		return self._layer
@@ -98,6 +105,7 @@ class App(widgets.QWidget):
 		if layer and layer.features.shape[0] > 0:
 			self._table_widget = AnnotationTable(self)
 			self.layout.addWidget(self._table_widget)
+			self._table_widget.cellChanged.connect(self.onCellChanged)
 
 	def _refresh_table_widget(self):
 		if self._layer and hasattr(self._layer, 'stored_selection'):

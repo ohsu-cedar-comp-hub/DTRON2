@@ -1,13 +1,6 @@
 import numpy as np
 import qtpy.QtWidgets as widgets
-from qtpy.QtGui import QColor
-#from napari import Viewer, gui_qt
 import logging
-import time
-
-# set up the background color
-red = QColor(255, 0, 0)
-white = QColor(255, 255, 255)
 
 class AnnotationTable(widgets.QTableWidget):
     def __init__(self, parent):
@@ -62,27 +55,25 @@ class AnnotationTable(widgets.QTableWidget):
         self.set_content(table = self._table)
     
     def onCellClicked(self, row, column):
+        
         if row not in self._layer.selected_data:
-            self._layer.selected_data = set(list(self._layer.selected_data)+[row])
-            self._layer.stored_selection = list(set(list(self._layer.selected_data)+[row]))
+            #Sometimes, you may have began a polygon that you never completed, or escaped out of. In which case, this row
+            #was made in the datatable but it no longer exists in the shape layer. We try to store it, if shape object exists.
+            try:
+                self._layer.selected_data = set(list(self._layer.selected_data)+[row])
+                self._layer.stored_selection = list(set(list(self._layer.selected_data)+[row]))
+            except: 
+                self.removeRow(row)
+                #for some reason, removing the row then adds it to selected_data. remove it here. 
+                #we deselected it. We should toggle the selection on the layer.
+                good_data = list(set([x for x in self._layer.selected_data if x!=row]))
+                self._layer.selected_data = set(good_data)
         else:
             #we deselected it. We should toggle the selection on the layer.
             good_data = list(set([x for x in self._layer.selected_data if x!=row]))
             self._layer.selected_data = set(good_data)
             self._layer.stored_selection = good_data
             #toggle the layer. 
-
-    # def set_selected_cell_background(self):
-    #     current = self.currentItem()
-    #     if current:
-    #         current.setBackground(red)
-    #     try:
-    #         previous = self.previousItem() 
-    #         print('previous')
-    #         if previous:
-    #             previous.setBackground(white)
-    #     except:
-    #         pass
 
     def set_content(self, table: dict, init=False):
         if table is None:

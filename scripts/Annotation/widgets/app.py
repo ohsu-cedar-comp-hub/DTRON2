@@ -5,10 +5,10 @@ from napari import Viewer, gui_qt
 from .image_selector import ImageSelector
 from .annotation_table import AnnotationTable
 import os
+import time
 """
-Some thoughts:
-To make it more obvious which cell is being examined (when you click on the table),
-we could follow the click event and change the color of that cell temporarily.
+Added auto table update when removed or added shapes object.
+Need to add 
 """
 
 class App(widgets.QWidget):
@@ -26,13 +26,11 @@ class App(widgets.QWidget):
 		self.setGeometry(700, 100, 350, 380)
 		self.layout = widgets.QVBoxLayout()
 		self.layout.setAlignment(Qt.AlignTop)
-		self.refresh_table_button = widgets.QPushButton('Refresh Annotations Table', self)
 		self.save_button = widgets.QPushButton('Save Annotation Updates', self)
 
 		self.selected_folder_label = self._make_selected_folder_label(folder_path)
 		self.layout.addWidget(self.selected_folder_label)
 		self.layout.addWidget(self.save_button)
-		self.layout.addWidget(self.refresh_table_button)
 		self.layout.addWidget(folder_select_button)
 
 		def handle_image_selection(image_file_name, image_file_path, annot_file_path):
@@ -45,16 +43,17 @@ class App(widgets.QWidget):
 			if self._layer:
 				self._layer.events.highlight.connect(self.on_polygon_click) # works, but overactive
 				self.stored_selection = []
+				self._layer.events.data.connect(self.onEditedShapes)
 				#self._layer.events.current_properties.connect(self.on_polygon_click) #activates when the current properties change
 				#note that current_properties won't update if you select an object with the same properties.
 				if self._table_widget:
 					self._table_widget.cellChanged.connect(self.onCellChanged)
+	
 
 		image_selector = ImageSelector(folder_path, image_pattern, on_item_selected=handle_image_selection, make_export_handler=make_export_handler)
 		self.layout.addWidget(image_selector)
 
 		self.setLayout(self.layout)
-		self.refresh_table_button.clicked.connect(self._refresh_table_widget)
 		self.save_button.clicked.connect(self._save_changes)
 
 	def _make_selected_folder_label(self, folder_path):
@@ -77,9 +76,12 @@ class App(widgets.QWidget):
 		return selected_folder_label
 	
 	def onCellChanged(self, row, column):
-		if self._layer:
+		if self._layer and self._table_widget:
 			if len(self._layer.selected_data)>1:
 				self._refresh_table_widget()
+
+	def onEditedShapes(self):
+		self._refresh_table_widget()
 
 	def get_layer(self):
 		return self._layer

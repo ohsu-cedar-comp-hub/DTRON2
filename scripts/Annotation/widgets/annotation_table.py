@@ -1,8 +1,9 @@
 import numpy as np
 import qtpy.QtWidgets as widgets
 from qtpy.QtGui import QColor
-from napari import Viewer, gui_qt
+#from napari import Viewer, gui_qt
 import logging
+import time
 
 # set up the background color
 red = QColor(255, 0, 0)
@@ -40,6 +41,13 @@ class AnnotationTable(widgets.QTableWidget):
             if np.isnan(entry):
                 entry = self.property_choices[C][0]
 
+        #what if we are editing, but the row was not in selected data?
+        #add the row to selected data.
+        if row not in self._layer.selected_data:
+            self._layer.selected_data = set(list(self._layer.selected_data)+[row])
+            self._layer.stored_selection = list(set(list(self._layer.selected_data)+[row]))
+            self.selectRow(row)
+        
         for row in self._layer.selected_data:
             if C != "metadata":
                 if entry not in self.property_choices[C]:
@@ -48,10 +56,10 @@ class AnnotationTable(widgets.QTableWidget):
                     return
                 else:
                     self._table[C][row] = entry
-                    self.set_content(table=self._table)
             else: #if it is metadata, it can be anything. Set the content as is.
                 self._table[C][row] = entry
-                self.set_content(table=self._table)
+
+        self.set_content(table = self._table)
     
     def onCellClicked(self, row, column):
         if row not in self._layer.selected_data:
@@ -111,3 +119,5 @@ class AnnotationTable(widgets.QTableWidget):
             self._layer.features = table
             self._layer.face_color = np.array([self.class_dict[x] for x in self._layer.features['class'].tolist()])
             self._layer.edge_color = np.array([self.anno_dict[x] for x in self._layer.features['anno_style'].tolist()])
+            #note here that it doesn't actualy set the items. Doing a setItem call causes OnCellChanged to be triggered,
+            #which 

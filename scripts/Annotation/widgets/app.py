@@ -1,11 +1,8 @@
 import qtpy.QtWidgets as widgets
 from qtpy.QtCore import Qt
-import numpy as np
-from napari import Viewer, gui_qt
 from .image_selector import ImageSelector
 from .annotation_table import AnnotationTable
 import os
-import time
 """
 Added auto table update when removed or added shapes object.
 Need to add 
@@ -131,7 +128,6 @@ class App(widgets.QWidget):
 				# Check if any shapes were clicked on
 				indices = layer.selected_data
 				if indices:
-					#if len(indices)>=len(self.stored_selection):
 					newrow = [r for r in list(indices) if r not in layer.stored_selection]
 					rmrow = [r for r in layer.stored_selection if r not in list(indices)]
 					toggle_rows = newrow+rmrow 
@@ -150,6 +146,7 @@ class App(widgets.QWidget):
 							self._table_widget.selectRow(rr)
 						self._layer.stored_selection = []
 						self.stored_selection = [] 
+				
 				###Removed this code, but it scans the datatable as finds the active rows, if desired.
 				# selected_ranges = self._table_widget.selectedRanges()
 				# selected_rows = set()

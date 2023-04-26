@@ -5,16 +5,12 @@ Date: 02/07/23
 
 import napari
 import os
-import glob
 import numpy as np
 import colorcet as cc
 from widgets.app import App
-from input_handler import InputHandler
 from annotation_export_handler import AnnotationExportHandler
 from util.file import lazy_read, load_json_data, zarr_read
-from util.annotation import make_annotation_data
 from event_filter.close_event_filter import CloseEventFilter
-from qtpy.QtWidgets import QFileDialog
 from widgets.folder_select_button import FolderSelectButton
 import vispy.color
 

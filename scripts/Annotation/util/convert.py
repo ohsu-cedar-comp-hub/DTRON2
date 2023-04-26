@@ -1,4 +1,5 @@
 import skimage.measure
+from skimage.measure import approximate_polygon
 import numpy as np
 
 def binary_mask_to_polygon_skimage(binary_mask,thresh=250):
@@ -32,6 +33,14 @@ def binary_mask_to_polygon_skimage(binary_mask,thresh=250):
 
 	#the vertices are read flipped in skimage.measure.find_contours, we will flip them here....
 	vertices = [[[yi,xi] for (xi,yi) in zip(X,Y)] for (X,Y) in zip(polygons_x,polygons_y)]
+
+	#reduce the number of vertices
+	for i,anno in enumerate(vertices):
+		verts = np.stack(anno,axis=0)
+		#reduce the amount of vertices using approximate.
+		verts = approximate_polygon(verts, tolerance = 2)
+		#convert back to a list and replace
+		vertices[i] = verts.tolist()
 
 	return [vertices,a]
 

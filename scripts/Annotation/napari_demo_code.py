@@ -101,7 +101,6 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 			IM, ch_names = zarr_read(image_file_path, split_channels=True)
 			#https://forum.image.sc/t/viewing-channel-name-in-multi-channel-image/35830/4
 			contrast_max = (255 if IM[0][0].dtype==np.uint8 else 65535)
-			cmap_counter=0
 			for ch_i, channel in reversed(list(enumerate(ch_names))):
 				this_cmap = vispy.color.Colormap([[0.0,0.0,0.0], cmap[ch_i]])
 				img_layer = viewer.add_image(IM[ch_i], name=channel, contrast_limits=[0,contrast_max], rgb=False, multiscale=True, visible=(True if ch_i==0 else False), blending='additive', colormap = this_cmap)

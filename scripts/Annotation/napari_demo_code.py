@@ -95,11 +95,16 @@ def update_image(image_file_name, image_file_path, annot_file_path):
 			#img_layer = viewer.add_image(zarr_read(image_file_path), name=image_file_name, contrast_limits=[0,255], rgb=False, multiscale=True)
 			#which will pull up a slider below the image.
 			IM, ch_names = zarr_read(image_file_path, split_channels=True)
-			#https://forum.image.sc/t/viewing-channel-name-in-multi-channel-image/35830/4
-			contrast_max = (255 if IM[0][0].dtype==np.uint8 else 65535)
-			for ch_i, channel in reversed(list(enumerate(ch_names))):
-				this_cmap = vispy.color.Colormap([[0.0,0.0,0.0], cmap[ch_i]])
-				img_layer = viewer.add_image(IM[ch_i], name=channel, contrast_limits=[0,contrast_max], rgb=False, multiscale=True, visible=(True if ch_i==0 else False), blending='additive', colormap = this_cmap)
+			if isinstance(IM[0],list):
+				#channels were properly split, otherwise it is an array type
+				#https://forum.image.sc/t/viewing-channel-name-in-multi-channel-image/35830/4
+				contrast_max = (255 if IM[0][0].dtype==np.uint8 else 65535)
+				for ch_i, channel in reversed(list(enumerate(ch_names))):
+					this_cmap = vispy.color.Colormap([[0.0,0.0,0.0], cmap[ch_i]])
+					img_layer = viewer.add_image(IM[ch_i], name=channel, contrast_limits=[0,contrast_max], rgb=False, multiscale=True, visible=(True if ch_i==0 else False), blending='additive', colormap = this_cmap)
+			else:
+				contrast_max = (255 if IM[0].dtype==np.uint8 else 65535)
+				img_layer = viewer.add_image(IM, name=image_file_name, contrast_limits=[0, contrast_max], multiscale=True)
 	else:
 		try:
 			img_layer = viewer.add_image(lazy_read([image_file_path]),name=image_file_name, contrast_limits=[0,2000], rgb=True, multiscale=False)

@@ -20,11 +20,14 @@ MM.run_simple_ometif_save(series_names, image_names) #does not save any metadata
 
 #### FOR CYC-IF DATA #####
 ## run this for saving multichannel cyclic IF data - will load each file into memory and hold it until complete.
+# can be .tif or .png files
 MM.run_bigtif_ometif_save(series_names,image_names) # see optional arguments to include resolution and channel names!
 ## run this for saving multichannel IF data - will load each file as a zarr object, calling it when necessary. Particularly useful if microscope saves tiles as default in .tifs.
+# must be .tif files
 MM.run_bigtif_ometif_save_zarr(series_names,image_names) # see optional arguments to include resolution and channel names!
 
 ##### FOR H&E images #####
+# can be .png or .tif files
 MM.run_bigtif_ometif_HandE_save(series_names, image_names, resolutionunit=None, use_compression=False) # see optional arguments
 """
 
@@ -34,6 +37,9 @@ import numpy as np
 import os, sys
 from tifffile import TiffWriter
 import zarr
+import skimage.io
+import imagecodecs
+hiddenimports = ["imagecodecs._" + x for x in imagecodecs._extensions()]
 
 class Make_OME_TIFS(object):
 
@@ -115,7 +121,10 @@ class Make_OME_TIFS(object):
         for num,series in enumerate(unique_series_name):
             progbar(num,len(unique_series_name),20)
 
-            images = [tifffile.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+            try:
+                images = [tifffile.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+            except: 
+                images = [skimage.io.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
             images = np.stack(images)
 
             tifffile.imwrite(os.path.join(self.save_dir,series+".ome.tif").replace(" ", "_"),images)
@@ -132,13 +141,13 @@ class Make_OME_TIFS(object):
         pixelsize = float, microns / pixel
         subresolution = int, number of magnifications to compress image for pyramid structure
         tilesize = int, size of tiles in pixels
-        use_compression = 'jpeg' or None or False
+        use_compression = 'jpeg', 'zlim', 'jpeg2000', or None or False
         """
         #init_util = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
         assert resolutionunit in ["MILLIMETER", "CENTIMETER", None], "argument 'resolutionunit' was {}, but must be in {}".format(resolutionunit, ["MILLIMETER", "CENTIMETER"])
-          
+
         if use_compression:
-            use_compression = 'jpeg'
+            use_compression = 'jpeg2000'
 
         if resolutionunit=="MILLIMETER":
             conversion = 1e3 #microns/millimeter 
@@ -152,7 +161,11 @@ class Make_OME_TIFS(object):
         for num,series in enumerate(unique_series_name):
             progbar(num,len(unique_series_name),20)
 
-            images = [tifffile.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+            try:
+                images = [tifffile.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+            except: 
+                images = [skimage.io.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+
             images = np.stack(images)
             #now the images should be C x Y x X.
             assert len(images.shape)==3, "'images' has shape {}, needs to be shape (Channels x X x Y), or you need to adjust function run_bigtif_ometif_save".format(images.shape)
@@ -167,7 +180,7 @@ class Make_OME_TIFS(object):
                     photometric='minisblack',
                     tile=(tilesize, tilesize),
                     compression = use_compression,
-                    resolutionunit='CENTIMETER'
+                    resolutionunit=resolutionunit,
                 )
 
                 if pixelsize is not None:
@@ -239,7 +252,7 @@ class Make_OME_TIFS(object):
         assert resolutionunit in ["MILLIMETER", "CENTIMETER", None], "argument 'resolutionunit' was {}, but must be in {}".format(resolutionunit, ["MILLIMETER", "CENTIMETER"])
         
         if use_compression:
-            use_compression = 'jpeg'
+            use_compression = 'jpeg2000'
         
         if resolutionunit=="MILLIMETER":
             conversion = 1e3 #microns/millimeter 
@@ -249,15 +262,17 @@ class Make_OME_TIFS(object):
         for num,series in enumerate(unique_series_name):
             progbar(num,len(unique_series_name),20)
 
-            images = [tifffile.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+            try:
+                images = [tifffile.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+            except: 
+                images = [skimage.io.imread(os.path.join(self.image_dir,image_name)) for image_name in im_names]
+
             images = np.stack(images)
             #squeeze the image.
             images = np.squeeze(images) #shape is X x Y x C
 
             #now the images should be X x Y x C.
             assert len(images.shape)==3, "'images' has shape {}, needs to be shape (Channels x X x Y), or you need to adjust function run_bigtif_ometif_save".format(images.shape)
-
-            channel_names = ['Red','Green','Blue']
 
             if pixelsize is None:
                 pixelsize = 1 #throw a default option here.
@@ -273,7 +288,6 @@ class Make_OME_TIFS(object):
                         'PhysicalSizeXUnit': 'µm',
                         'PhysicalSizeY': pixelsize,
                         'PhysicalSizeYUnit': 'µm',
-                        'Channel': {'Name': channel_names},
                         'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
                     }
                     options = dict(
@@ -289,7 +303,6 @@ class Make_OME_TIFS(object):
                         'SignificantBits': 10,
                         'PhysicalSizeX': pixelsize,
                         'PhysicalSizeY': pixelsize,
-                        'Channel': {'Name': channel_names},
                         'Plane': {'PositionX': [0.0] * 16, 'PositionXUnit': ['µm'] * 16}
                     }
                     options = dict(

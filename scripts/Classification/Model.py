@@ -36,13 +36,13 @@ class Generic_MLP(nn.Module):
 		for i in range(len(n_features)-2):
 			self.layers.add_module('Lin_{}'.format(i+1),linear_bn_act(n_features[i],n_features[i+1]))
 		self.out_logits = nn.Linear(n_features[-2], n_features[-1])
-
 	
 	def forward(self, x):
 		x = self.layers(x)
 		x = self.out_logits(x)
-		# is logits nows.
-		return x_out
+		#x = x.softmax(dim = 1) #the input to CCE is expected to be the unnormalized logits.
+		#https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+		return x
 
 	def save_model(self, filename):
 		torch.save(self.state_dict(), filename)

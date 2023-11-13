@@ -1,68 +1,63 @@
 """
 Author: Christopher Z. Eddy
-Date: 02/06/23
+Date: 02/06/23, updated 11/08/23
 Purpose:
-General training script for logits-based BCE optimization and classification
+General training script for logits-based CCE optimization and classification
 """
 
 import torch 
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter #tensorboard writer 
 
 import tqdm #progress bar; equivalent to Keras/Tensorflow
 
-def train(train_params, training_set, validation_set, model, optimizer, device, log_path, save_path, num_classes, max_epochs: int=50, val_min_loss = 1e8):
+def train(config, training_generator, validation_generator, model, optimizer, device, log_path, save_path, val_min_loss = 1e8):
 	if save_path[-1]!="/":
 		save_path = save_path+"/" #directory down
 	
 	#Tensorboard writer
 	writer = SummaryWriter(log_path)
 
-	#this will be passed into train.
-	#CUDA for PyTorch  ### This will be passed to the train loop.
-	#use_cuda = torch.cuda.is_available()
-	# device = "cuda" if torch.cuda.is_available() else "cpu"
-	# print(f"Using {device} device")
+	############ CLASS WEIGHTS #################
+	class_weights = config.dataset_opts['class_counts']
+	#convert class weights from a dictionary to a 1D torch tensor of size C, where C is the number of classes.
+	#the weight should also be the emphasis weight of the given class; however class_weights from config are the class balances.
+	#
+	class_weights = np.array([class_weights[key] for key in class_weights.keys()])
 
-	#models and optimizers are first loaded to CPU. Send to GPU.
-	print("sending models to GPU device...")
-	#model.cuda()
-	model.to(device) #this is proper. Cuda will send it to device.
-	#we don't need to send the optimizers.
-
-	print("Creating data generators...")
-	#data generators
-	training_generator = torch.utils.data.DataLoader(training_set, **train_params)
-	validation_generator = torch.utils.data.DataLoader(validation_set, **train_params)
-
+	# #we want to overemphasize the smaller class groups:
+	class_weights = np.sum(class_weights) / class_weights 
+	import pdb;pdb.set_trace()	
+	class_weights = torch.from_numpy(class_weights).to(device) #turn into a torch tensor and send to cuda device, if possible.
+	############################################
 	#Define Loss functions
-	bce_loss = torch.nn.BCEWithLogitsLoss() 
+	#bce_loss = torch.nn.BCEWithLogitsLoss() 
+	cce_loss = torch.nn.CrossEntropyLoss(weight = class_weights, label_smoothing = config.LABEL_SMOOTHING) #the 0.1 is tunable. 
+
 	"""
 	Notes: 
 	We should consider using class weights, since we will certainly have an unbalanced dataset.
 	"""
-	# optimizer = torch.optim.SGD(model.paramters(), lr=learning_rate) 
-	#the optimizer should be provided as an argument so that we can save its status and load it if necessary.
 	
 	#####################################################################################
 	print("Beginning training...")
 	#Loop over epochs 
 	all_iter=0 #will keep track of how many training iterations we have completed.
-	for epoch in range(max_epochs):
+	for epoch in range(config.EPOCHS):
 		######################################
 		""" RUN TRAIN LOOP """
 		######################################
 		#Training 
-		epoch_bce_loss = 0 #will accumulate the total bce loss for each batch to report an epoch average.
+		epoch_cce_loss = 0 #will accumulate the total bce loss for each batch to report an epoch average.
 		iter_n = 0 #define how many iterations make up each epoch.
 
 		### This below is a gross way of writing the code, but it was the only way to get the tqdm progress bar to update correctly.
-		with tqdm.tqdm(training_generator, unit='batch') as tepoch:
+		with tqdm.tqdm(total=config.STEPS_PER_EPOCH, unit="batch") as tepoch:
 			#loop over training batches 
 			tepoch.set_description(f"Train Epoch {epoch}")
-
-			for local_batch,targets in tepoch:
-				#one hot encode targets.
-				targets = torch.nn.functional.one_hot(targets, num_classes=num_classes)
+			train_correct = 0
+			#import pdb;pdb.set_trace()
+			for train_ind,(local_batch,targets) in enumerate(training_generator):
 				iter_n += 1
 				all_iter += 1
 				#transfer to GPU
@@ -71,82 +66,103 @@ def train(train_params, training_set, validation_set, model, optimizer, device, 
 
 				#Model computations
 				optimizer.zero_grad()
-				logits = model(local_batch)
-				loss = bce_loss(logits, targets) 
-				iter_bce_loss = loss.item()
-				epoch_bce_loss += iter_bce_loss
+				probs = model(local_batch) #these are logits, not probabilities! Use softmax to get probabilities
+				loss = cce_loss(probs, targets) 
+				iter_cce_loss = loss.item()
+				epoch_cce_loss += iter_cce_loss
 
+				#accuracy 
+				train_correct += (torch.argmax(torch.nn.functional.softmax(probs,dim=1),dim=1) == torch.argmax(targets, dim=1)).sum().item()
 
-
+				######################################################################
 				######################################################################
 				""" WRITE ITERATION PROGRESS TO TENSORBOARD """
 				#record training losses
-				writer.add_scalar('BCE Loss iter', iter_bce_loss, all_iter)
+				writer.add_scalar('CCE Loss iter', iter_cce_loss, all_iter)
+				######################################################################
 				######################################################################
 
 				loss.backward()
-				torch.nn.utils.clip_grad_norm_(model.paramters(),5.) #gradient clipping
+				torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
 				optimizer.step()
 
 				#Update progress bar
-				tepoch.set_postfix(bce_loss = iter_bce_loss)
+				tepoch.set_postfix(cce_loss = iter_cce_loss)
+				tepoch.update()
 
-		epoch_bce_loss /= iter_n 
+				if train_ind == config.STEPS_PER_EPOCH - 1:
+					break #break the for loop
+
+		epoch_cce_loss /= iter_n
+		epoch_train_accuracy = train_correct / (iter_n * config.BATCH_SIZE)
 
 		#print the average epoch loss.
-		print(f"Epoch {epoch+1}/{max_epochs} *** TRAIN BCE_Loss = {epoch_bce_loss:.6f}")
+		print(f"Epoch {epoch+1}/{config.EPOCHS} *** TRAIN CCE_Loss = {epoch_cce_loss:.6f} ::: TRAIN Acc = {epoch_train_accuracy:.6f}")
 
 
 		###############################
 		"""   RUN VALIDATION LOOP   """
 		###############################
 		# Validation
-		val_bce_loss = 0
+		val_cce_loss = 0
 		iter_n = 0
+		val_correct = 0
 
 		with torch.no_grad(): ##Same as -> #set_grad_enabled(False):
-			with tqdm.tqdm(validation_generator, unit="batch") as tepoch:
+			with tqdm.tqdm(total=config.VALIDATION_STEPS, unit="batch") as tepoch:
 
 				tepoch.set_description(f"Val Epoch {epoch}")
 
-				for local_batch,targets in tepoch:
-					#one hot encode targets.
-					targets = torch.nn.functional.one_hot(targets, num_classes=num_classes)
+				for val_ind,(local_batch,targets) in enumerate(validation_generator):
 					iter_n += 1
 					#transfer to GPU
 					local_batch = local_batch.to(device)
 					targets = targets.to(device)
 
-					#model bce loss
-					logits = model(local_batch)
-					val_bce_loss += bce_loss(logits, targets).item()
+					#model cce loss
+					probs = model(local_batch)
+					val_cce_loss += cce_loss(probs, targets).item()
+
+					#accuracy 
+					val_correct += (torch.argmax(torch.nn.functional.softmax(probs,dim=1),dim=1) == torch.argmax(targets, dim=1)).sum().item()
 
 					#we could in the future add (1) accuracy, since we can do an argmax calculation of sigma(x) where sigma is the softmax function.
 
 					#Update progress bar 
-					tepoch.set_postfix(bce_loss = val_bce_loss/iter_n)
+					tepoch.set_postfix(cce_loss = val_cce_loss/iter_n)
+					tepoch.update()
+
+					if val_ind == config.VALIDATION_STEPS - 1:
+						break #break the validation loop.
+
+		epoch_val_accuracy = val_correct / (iter_n * config.BATCH_SIZE)
 
 		#print the average validation loss
-		print(f"Epoch {epoch+1}/{max_epochs} *** VAL Loss = {val_bce_loss:.6f}")
+		print(f"Epoch {epoch+1}/{config.EPOCHS} *** VAL Loss = {val_cce_loss:.6f} ::: VAL Acc = {epoch_val_accuracy:.6f}")
 
 	   
 		######################################################################
 		""" WRITE EPOCH PROGRESS TO TENSORBOARD """
 		#record training losses
-		writer.add_scalar('BCE Loss/train', epoch_bce_loss, epoch)
+		writer.add_scalar('CCE Loss/train', epoch_cce_loss, epoch)
 		#record validation losses
-		writer.add_scalar('BCE Loss/val', val_bce_loss, epoch)
+		writer.add_scalar('CCE Loss/val', val_cce_loss, epoch)
+
+		#Record accuracies
+		writer.add_scalar('Acc/train', epoch_train_accuracy, epoch)
+		writer.add_scalar('Acc/val', epoch_val_accuracy, epoch)
 		######################################################################
 
 		######################################################################
 		"""  Write checkpoint for states!  """
 		## write if lower validation loss or for every 10th epoch.
-		if val_bce_loss<val_min_loss or epoch%10==0:
+		if val_cce_loss<val_min_loss or epoch%10==0:
 			torch.save({
 				'epoch': epoch,
 				'model_state_dict': model.state_dict(),
 				'optimizer_state_dict': optimizer.state_dict(),
-				'val_bce_loss': val_bce_loss
+				'val_ttl_loss': val_cce_loss
 				}, save_path+"MLP_Epoch_%d.tar"%epoch)
-			val_min_loss = val_ttl_loss
+			val_min_loss = val_cce_loss
 		######################################################################
+	writer.close()

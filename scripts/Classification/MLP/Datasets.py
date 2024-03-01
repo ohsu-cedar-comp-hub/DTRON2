@@ -11,7 +11,7 @@ the 162nd is the Leiden cluster assignment, and the 161st is the sample name.
 
 import os 
 import numpy as np
-from torch.utils.data import Dataset, DataLoader 
+from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms, utils 
 import torch.nn.functional as F
 import mmap
@@ -28,7 +28,12 @@ def generate_offset_file(filepath, has_header=True):
 	"""
 	print("    Generating memory mapped file offsets...")
 	start = time.time()
-	fbuff = open(filepath, mode='r', encoding='utf8')
+	if filepath.endswith('.gz'):
+		import gzip
+		my_open = gzip.open
+	else:
+		my_open = open
+	fbuff = my_open(filepath, mode='r', encoding='utf8')
 	f1_mmap = mmap.mmap(fbuff.fileno(), 0, access=mmap.ACCESS_READ)
 	if has_header:
 		offsets=[]#[0] #first line is always at offset 0.  #however, most of our files contain a header
@@ -54,7 +59,7 @@ class cycIF_Dataset(Dataset):
 		https://discuss.pytorch.org/t/numpy-memmap-throttles-with-dataloader-when-available-ram-less-than-file-size/83274
 		"""
 		if class_mapping is None:
-			self.class_mapping = {x:x for x in range(num_classes)}
+			self.class_mapping = {x:x for x in range(num_classes)} # The assumption is that the labels are all provided as integers! 
 		else:
 			self.class_mapping = class_mapping
 		self.csv_path = csv_file 
@@ -77,15 +82,21 @@ class cycIF_Dataset(Dataset):
 
 	def get_all_targets(self):
 		#sample_ind is the column index that contains "sample name"
-		targets = np.zeros(self.__len__())
+		""" TARGET column could be numeric OR string in this case. We want to adjust for either """
+		self.memmap.seek(self.ofs[0])
+		line = self.memmap.readline()
+		line =  line.decode("utf8").split(',')
+		if is_float(line[self.target_col]):
+			targets = np.zeros(self.__len__())
+		else:
+			targets = np.empty(self.__len__(), dtype="object")
 		with tqdm.tqdm(total=self.__len__(), unit="index") as tepoch:
-			import pdb;pdb.set_trace()
 			for index in range(self.__len__()):
 				self.memmap.seek(self.ofs[index])
 				line = self.memmap.readline()
-				line = line.decode("utf8").split()[0].split(',')
-				target = int(line[self.target_col])
-				line = [np.float32(x) for i,x in enumerate(line) if i not in self.bad_cols] #doesn't scale well with large features. Can update in the future.
+				line =  line.decode("utf8").split(',')#line.decode("utf8").split()[0].split(',')
+				target = int(line[self.target_col]) if is_float(line[self.target_col]) else line[self.target_col] 
+				#line = [np.float32(x) for i,x in enumerate(line) if i not in self.bad_cols] #doesn't scale well with large features. Can update in the future.
 				#line = [np.float32(x) if i!=sample_ind else x for i,x in enumerate(line.decode("utf8").split()[0].split(','))]
 				targets[index] = target
 				tepoch.update()
@@ -110,7 +121,7 @@ class cycIF_Dataset(Dataset):
 		print("Complete.")
 
 		
-	def __getitem__(self,index, sample_ind = 160):
+	def __getitem__(self, index):
 		if torch.is_tensor(index):
 			index = index.tolist()
 		###################################
@@ -119,11 +130,11 @@ class cycIF_Dataset(Dataset):
 		###################################
 		self.memmap.seek(self.ofs[index])
 		line = self.memmap.readline()
-		line = line.decode("utf8").split()[0].split(',')
+		line = line.decode("utf8").split(',')#split()[0].split(',') #if it is csv, this should work...
 		if hasattr(self,'target_col'):
 			#one hot encoding like.
 			target = np.zeros(self.num_classes, dtype=np.float32)
-			ind = int(line[self.target_col])
+			ind = int(line[self.target_col]) if is_float(line[self.target_col]) else line[self.target_col] #the target could be a string OR a integer
 			ind = self.class_mapping[ind]
 			try:
 				target[ind] = 1. #should be an integer anyway. #now a one hot encoded array.
@@ -136,7 +147,8 @@ class cycIF_Dataset(Dataset):
 		#line = [np.float32(x) if i!=sample_ind else x for i,x in enumerate(line)] #first split gets rid of the "/n", then we separate by csv.
 		#for each line, we only want to return the features. so we will want to delete the last 3 entries, where the last one will be the target, 
 		#which should also be returned!
-		line = [np.float32(x) for i,x in enumerate(line) if i not in self.bad_cols]
+		
+		line = [np.float32(x) if (i not in self.bad_cols) and is_float(x) else np.float32(0.) for i,x in enumerate(line)] #all the features should be numeric; that that are strings must be thrown out, but for ease will be set to 0., which the model should learn to ignore as non-informative.
 		#line = [x for i,x in enumerate(line) if i not in self.bad_cols] #doesn't scale well with large features. Can update in the future.
 
 		# if sample_ind not in self.bad_cols: #the sample is a string, whereas everything else is an integer or float. A string cannot be converted into a float32 array.
@@ -152,6 +164,19 @@ class cycIF_Dataset(Dataset):
 
 	def __len__(self):
 		return len(self.ofs)
+
+	def _get_targets(self):
+		""" Use the provided class mapping to get all labels returned as integers; useful for stratification of the dataset. """
+		all_targets = np.zeros(self.__len__(),dtype=int)
+		for index in range(self.__len__()):
+			self.memmap.seek(self.ofs[index])
+			line = self.memmap.readline()
+			line = line.decode("utf8").split(',')#split()[0].split(',') #if it is csv, this should work...
+			ind = int(line[self.target_col]) if line[self.target_col].isnumeric() else line[self.target_col] #the target could be a string OR a integer
+			ind = self.class_mapping[ind]
+			all_targets[index] = ind
+		return all_targets
+
 	##########################################
 	"""
 	Helper functions
@@ -167,6 +192,7 @@ class cycIF_Dataset(Dataset):
 		return line
 
 	def split_train_val(self, val_split=0.2, write_out=True, write_path=None):
+		
 		"""
 		Sometimes you have all the data in just a single spreadsheet. In that case, we would like to split the data into a large percent towards training, 
 		and a smaller percent towards validation (val_split). 
@@ -215,20 +241,53 @@ class cycIF_Dataset(Dataset):
 				line,target=self.__getitem__(ind)
 				file_writer.writerow(list(line)+[target])
 
-def marker_dataloader(csv_filepath, batch_size: int, num_classes: int,  num_workers: int = 1, bad_cols = None, target_col = None, class_mapping = None, shuffle = False, drop_last = True, pin_memory = True):
+def marker_dataloader(csv_filepath, batch_size: int, num_classes: int,  num_workers: int = 1, bad_cols = None, target_col = None, class_mapping = None, shuffle = False, drop_last = False, pin_memory = True):
 	dset = cycIF_Dataset(csv_filepath, bad_cols=bad_cols, target_col=target_col, num_classes = num_classes, class_mapping = class_mapping)
 	dataloader = DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last = drop_last, pin_memory = pin_memory)
-	return dataloader
+	return dataloader, dset.return_col_names()
 
-def split_marker_dataloader(csv_filepath, batch_size: int, num_classes: int, split_frac: float = 0.2, num_workers: int = 1, bad_cols = None, target_col = None, class_mapping = None, shuffle = False, drop_last = True, pin_memory = True):
+def split_marker_dataloader(csv_filepath, batch_size: int, num_classes: int, split_frac: float = 0.2, num_workers: int = 1, bad_cols = None, target_col = None, class_mapping = None, shuffle = True, stratified_split = False, drop_last = True, pin_memory = True):
 	dset = cycIF_Dataset(csv_filepath, bad_cols=bad_cols, target_col=target_col, num_classes = num_classes, class_mapping = class_mapping)
-	train_size = int(0.8 * dset.__len__())
-	test_size = dset.__len__() - train_size
 	#the random split might be bad, considering that we ought to stratify based on the classes. It is however, time consuming to pull out that data.
-	train_dataset, test_dataset = torch.utils.data.random_split(dset, [train_size, test_size])
+	if not stratified_split:
+		train_size = int((1 - split_frac) * dset.__len__())
+		test_size = dset.__len__() - train_size
+		train_dataset, test_dataset = torch.utils.data.random_split(dset, [train_size, test_size]) ### WHY NOT A STRATIFIED TRAIN SPLIT??
+	else:
+		train_dataset, test_dataset = stratified_train_test_split(dset, dset.__len__(), split_frac)
+	
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last = drop_last, pin_memory = pin_memory)
 	val_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last = drop_last, pin_memory = pin_memory)
-	return train_dataloader, val_dataloader
+	return train_dataloader, val_dataloader, dset.return_col_names()
+
+def stratified_train_test_split(dataset, data_size, testsize):
+	print("    STRATIFYING DATA BY CLASSIFICATION...")
+	from sklearn.model_selection import train_test_split
+	targets = dataset._get_targets()
+	# Stratified Sampling for train and val
+	train_idx, validation_idx = train_test_split(np.arange(data_size),
+												test_size=testsize,
+												random_state=999,
+												shuffle=True,
+												stratify=targets)
+	
+	_, counts = np.unique(targets, return_counts=True)
+	class_weights = counts / np.sum(counts)
+	print("     Dataset Class Frequencies = {}".format(class_weights))
+
+	#Subset dataset for train and val	
+	train_dataset = Subset(dataset, train_idx)
+	validation_dataset = Subset(dataset, validation_idx)
+	return train_dataset, validation_dataset
+
+def is_float(string):
+	if string is not None:
+		if string.replace(".", "").isnumeric():
+			return True
+		else:
+			return False
+	else:
+		return False
 
 
 if __name__ == "__main__":
@@ -237,9 +296,17 @@ if __name__ == "__main__":
 	"""
 	import Config as configurations
 	config = configurations.Config()
-	# bad_cols = [160,161] #sample, cluster
-	# target_col = 162 #assignment
-	dset = cycIF_Dataset(config.dataset_opts['train_dir'], num_classes = 5, bad_cols=config.dataset_opts['bad_cols'], target_col=config.dataset_opts['target_col'])
+
+	""" USE TO GET CONFIG FILE CLASS MAPPING AND NUM CLASSES """
+	dset = cycIF_Dataset(config.dataset_opts['train_dir'], num_classes = config.NUM_CLASSES, bad_cols=config.dataset_opts['bad_cols'], target_col=config.dataset_opts['target_col'], class_mapping = config.dataset_opts['target_map'])
+	# targets = dset.get_all_targets()
+	# Ts,counts = np.unique(targets, return_counts=True)
+
+	# training_gen, validation_gen, col_names = split_marker_dataloader(config.dataset_opts['train_dir'], num_classes = config.NUM_CLASSES, 
+	# 						split_frac = 0.2, batch_size = config.BATCH_SIZE, bad_cols = config.dataset_opts['bad_cols'], 
+	# 						target_col = config.dataset_opts['target_col'], class_mapping = config.dataset_opts['target_map'],
+	# 						shuffle=True)
+
 	#dataloader = DataLoader(dset, batch_size=4, shuffle=False, num_workers=1) #automatically converts data to tensor
 	# Split dataset into two files. 
 	# dset.split_train_val(val_split=0.2, write_path="./data/test")

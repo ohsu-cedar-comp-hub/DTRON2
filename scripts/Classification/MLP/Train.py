@@ -27,13 +27,12 @@ def train(config, training_generator, validation_generator, model, optimizer, de
 
 	# #we want to overemphasize the smaller class groups:
 	class_weights = np.sum(class_weights) / class_weights 
-	import pdb;pdb.set_trace()	
 	class_weights = torch.from_numpy(class_weights).to(device) #turn into a torch tensor and send to cuda device, if possible.
 	############################################
 	#Define Loss functions
 	#bce_loss = torch.nn.BCEWithLogitsLoss() 
 	cce_loss = torch.nn.CrossEntropyLoss(weight = class_weights, label_smoothing = config.LABEL_SMOOTHING) #the 0.1 is tunable. 
-
+	l1_crit = torch.nn.L1Loss(reduction='sum')	
 	"""
 	Notes: 
 	We should consider using class weights, since we will certainly have an unbalanced dataset.
@@ -49,6 +48,7 @@ def train(config, training_generator, validation_generator, model, optimizer, de
 		######################################
 		#Training 
 		epoch_cce_loss = 0 #will accumulate the total bce loss for each batch to report an epoch average.
+		epoch_l1_loss = 0
 		iter_n = 0 #define how many iterations make up each epoch.
 
 		### This below is a gross way of writing the code, but it was the only way to get the tqdm progress bar to update correctly.
@@ -71,6 +71,14 @@ def train(config, training_generator, validation_generator, model, optimizer, de
 				iter_cce_loss = loss.item()
 				epoch_cce_loss += iter_cce_loss
 
+				l1_reg_loss = 0
+				if config.train_opts['classifier_l1_weight'] > 0:
+					for param in model.parameters():
+						target = torch.autograd.Variable(torch.zeros(param.shape)).to(device)
+						l1_reg_loss += l1_crit(param, target)
+					loss += config.train_opts['classifier_l1_weight'] * l1_reg_loss
+					epoch_l1_loss += l1_reg_loss.item()
+
 				#accuracy 
 				train_correct += (torch.argmax(torch.nn.functional.softmax(probs,dim=1),dim=1) == torch.argmax(targets, dim=1)).sum().item()
 
@@ -79,6 +87,8 @@ def train(config, training_generator, validation_generator, model, optimizer, de
 				""" WRITE ITERATION PROGRESS TO TENSORBOARD """
 				#record training losses
 				writer.add_scalar('CCE Loss iter', iter_cce_loss, all_iter)
+				if config.train_opts['classifier_l1_weight'] > 0:
+					writer.add_scalar('Sparsity Loss iter', l1_reg_loss.item(), all_iter)
 				######################################################################
 				######################################################################
 
@@ -94,11 +104,15 @@ def train(config, training_generator, validation_generator, model, optimizer, de
 					break #break the for loop
 
 		epoch_cce_loss /= iter_n
+		if config.train_opts['classifier_l1_weight'] > 0:
+			epoch_l1_loss /= iter_n
 		epoch_train_accuracy = train_correct / (iter_n * config.BATCH_SIZE)
 
 		#print the average epoch loss.
-		print(f"Epoch {epoch+1}/{config.EPOCHS} *** TRAIN CCE_Loss = {epoch_cce_loss:.6f} ::: TRAIN Acc = {epoch_train_accuracy:.6f}")
-
+		if config.train_opts['classifier_l1_weight'] > 0:
+			print(f"Epoch {epoch+1}/{config.EPOCHS} *** TRAIN CCE_Loss = {epoch_cce_loss:.6f}, TRAIN L1_Loss = {epoch_l1_loss:.6f} ::: TRAIN Acc = {epoch_train_accuracy:.6f}")
+		else:
+			print(f"Epoch {epoch+1}/{config.EPOCHS} *** TRAIN CCE_Loss = {epoch_cce_loss:.6f} ::: TRAIN Acc = {epoch_train_accuracy:.6f}")
 
 		###############################
 		"""   RUN VALIDATION LOOP   """
@@ -145,6 +159,8 @@ def train(config, training_generator, validation_generator, model, optimizer, de
 		""" WRITE EPOCH PROGRESS TO TENSORBOARD """
 		#record training losses
 		writer.add_scalar('CCE Loss/train', epoch_cce_loss, epoch)
+		if config.train_opts['classifier_l1_weight'] > 0:
+			writer.add_scalar('Sparsity Loss iter', epoch_l1_loss, epoch)
 		#record validation losses
 		writer.add_scalar('CCE Loss/val', val_cce_loss, epoch)
 

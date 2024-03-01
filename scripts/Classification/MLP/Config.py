@@ -37,9 +37,6 @@ class Config(object):
 	#Number of validation steps per epoch to take
 	VALIDATION_STEPS = 100
 
-	# Number of input features
-	NUM_INPUT_FEATURES = 160
-
 	# Learning rate and momentum
 	# In CellPose documentation, these parameters follow
 	LEARNING_RATE = 2e-2
@@ -53,17 +50,18 @@ class Config(object):
 
 	""" The following should be specific for your dataset """
 	dataset_opts = {
-			'train_dir' : "/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/data/classification/masterdf_allcells.csv", #"/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/data/classification/masterdf_allcells.csv",
+			'train_dir' : "/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/data/classification/masterdf_allcells_ACED_cols.csv",#"/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/data/classification/masterdf_allcells.csv", #"/home/groups/CEDAR/eddyc/projects/cyc_IF/DTRON2/data/classification/masterdf_allcells.csv",
 			'val_dir' : None, #"/home/groups/CEDAR/eddyc/projects/cyc_IF/UMAP/data/Normalized Mean Intensities_processed_robust_CE_20NN_globalthresh_celltyped.csv",
 			'test_dir': None,
-			'bad_cols': list(range(12)) +  list(range(172,183)),#[160, 161], #MANUALLY IDENTIFIED COLUMNS TO EXCLUDE IN CLASSIFIER! sample name, manually identified classification, CAN BE NONE TYPE
-			'target_col': 176,#162, #MANUALLY IDENTIFIED COLUMN OF CSV CONTAINING THE CLASSIFICATION!
+			'bad_cols': list(np.arange(26, 37)) + [38, 39, 40, 41, 42, 43],#[27,28], #list(range(12)) +  list(range(172,183)),#[x for x in range(183) if x not in [19,  27,  32,  39,  55,  59,  67,  71,  75,  87,  89, 103, 107, 119, 147, 151, 152,  23, 157, 141]], # #MANUALLY IDENTIFIED COLUMNS TO EXCLUDE IN CLASSIFIER! sample name, manually identified classification, CAN BE NONE TYPE
+			'target_col': 37,#26, #176,#162, #MANUALLY IDENTIFIED COLUMN OF CSV CONTAINING THE CLASSIFICATION!
 
 			#Run dataset.get_all_targets() to obtain all entries of the target column. Using np.unique, create a unique target mapping list and to get the counts!
+
 			'target_map' : {x:i for i,x in enumerate(np.array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10., 11., 12.,
 															13., 14., 15., 16., 17., 18., 19., 20., 21., 22., 23., 24., 25.,
 															26., 27., 28., 29., 30., 31., 32., 33., 34., 35., 36., 37., 38.,
-															39., 41., 42., 43., 44., 45., 47.], dtype=int))
+															39., 41., 42., 43., 44., 45., 47.], dtype=int))								
 							},
 			'class_counts': {i:x for i,x in enumerate(np.array([50209, 48977, 47267, 46304, 33797, 31330, 23252, 22652, 22063,
 															21767, 20026, 19837, 18145, 16927, 16856, 16598, 16357, 10387,
@@ -71,11 +69,36 @@ class Config(object):
 															10439, 10266,  9461,  8894,  8520,  8104,  1887,  7365,  7109,
 															6856,  6151,  5112,  2066,  3186,  2865,  2852,  1627,   377,
 															154], dtype=int))},
-			#{x:x-1 for x in range(1,6)}
+
+			# 'target_map' : {x:i for i,x in enumerate(np.array(['AMACR high luminal', 'APC M1 macrophage', 'APC M2 macrophage',
+			# 										'APC stromal', 'AR+ Smooth Muscle', 'AR+ aSMA+ and Vim+',
+			# 										'AR+ other stromal', 'B cells', 'CD4+ CD3+ t cells',
+			# 										'CD4- CD3+ t cells', 'CD90+ and Vim+ MSC', 'CD90+ and aSMA+ MSC',
+			# 										'EMT/infiltrating vim+', 'Granulocytes', 'M1 macrophage',
+			# 										'Mast cells', 'NK cells', 'Smooth Muscle', 'Treg cells', 'basal',
+			# 										'luminal', 'mesenchymal/endothelial', 'nerve', 'neuroendocrine',
+			# 										'non-APC M2 macrophage', 'other APC immune cells', 'other stromal'],
+			# 										dtype='object'))								
+			# 				},
+
+			# 'class_counts': {i:x for i,x in enumerate(np.array([ 45306,   2640,   5836,  12745,   8254,   4664,  15863,   1931,
+			# 												12702,   7513,   8565,   8300,  20650,   2374,   3106,   9483,
+			# 												678,  81255,   1380,  47961, 320395,  32706,   5560,   1390,
+			# 												2687,   3908,  31609], dtype=int))
+			# 				},
+						
 		}
+	
+	train_opts = {
+		'classifier_l1_weight': 1e-3,
+	}
 
 	# Number of classification classes
 	NUM_CLASSES = len(dataset_opts['target_map'].keys())
+
+	#import pdb;pdb.set_trace()
+	# Number of input features
+	NUM_INPUT_FEATURES = 26#183 - len(np.unique(dataset_opts['bad_cols'] + [dataset_opts['target_col']]))#160
 
 	#Label smoothing during training, to promote uncertainty.
 	LABEL_SMOOTHING = 0.1

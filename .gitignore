@@ -166,3 +166,10 @@ scripts/Classification/models/*
 data/annotation/napari_ex/segmentation/*
 scripts/Segmentation/Shape_Based/.ipynb_checkpoints
 data/classification/*
+scripts/Classification/MLP/aced_im_header.csv
+scripts/Normalization/models/checkpoints/*
+scripts/Normalization/models/logs/*
+scripts/Normalization/*.err
+scripts/Normalization/*.pdf
+scripts/Normalization/optimal_transport/*.pdf
+scripts/Classification/xgboost/activate_env.sh
